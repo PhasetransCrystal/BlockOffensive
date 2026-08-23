@@ -4,17 +4,17 @@
   "mixinextras": {
     "minVersion": "0.5.0"
   },
-  "package": "com.phasetranscrystal.blockoffensive.mixin",
+  "package": "com.ptcrys.blockoffensive.mixin",
   "compatibilityLevel": "JAVA_8",
   "refmap": "blockoffensive.refmap.json",
-  "plugin": "com.phasetranscrystal.blockoffensive.BlockOffensiveMixinPlugin",
+  "plugin": "com.ptcrys.blockoffensive.BlockOffensiveMixinPlugin",
   "mixins": [
     "C4KitsItemEntityMixin",
     "StepSoundMixin"
   ],
   "client": [
-    "client.C4ItemOutlineMixin",
-    "PlayerRendererMixin"
+    "client.PlayerRendererMixin",
+    "client.C4ItemOutlineMixin"
   ],
   "injectors": {
     "defaultRequire": 1

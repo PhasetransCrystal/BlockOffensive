@@ -5,7 +5,6 @@ pluginManagement {
             name = 'MinecraftForge'
             url = 'https://maven.minecraftforge.net/'
         }
-        maven { url = 'https://maven.parchmentmc.org' } // Add this line
     }
 }
 
@@ -13,9 +12,11 @@ plugins {
     id 'org.gradle.toolchains.foojay-resolver-convention' version '0.7.0'
 }
 
-rootProject.name = 'blockoffensive'
-includeBuild("FPSMatch"){
+rootProject.name = 'BlockOffensive'
+
+includeBuild('FPSMatch') {
     dependencySubstitution {
         substitute module('com.phasetranscrystal:fpsmatch') using project(':')
     }
 }
+
