@@ -8,16 +8,23 @@ import com.ptcrys.blockoffensive.compat.CSGrenadeCompat;
 import com.ptcrys.blockoffensive.data.DeathMessage;
 import com.ptcrys.blockoffensive.data.DeathMessageRules;
 import com.ptcrys.blockoffensive.item.BOItemRegister;
+import com.ptcrys.blockoffensive.minimap.CSHudSafeAreaLayouts;
+import com.ptcrys.blockoffensive.minimap.CSKillFeedGeometry;
 import com.ptcrys.fpsmatch.common.item.FPSMItemRegister;
+import com.ptcrys.fpsmatch.core.minimap.hud.ScreenRect;
 import com.ptcrys.fpsmatch.util.RenderUtil;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.locale.Language;
+import net.minecraft.network.chat.FormattedText;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.util.FormattedCharSequence;
 import net.minecraft.world.item.Items;
 import net.minecraftforge.registries.ForgeRegistries;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
@@ -25,6 +32,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 
+@SuppressWarnings("all")
 public class CSDeathMessageHud{
     private final Object queueLock = new Object();
     private final LinkedList<MessageData> messageQueue = new LinkedList<>();
@@ -74,22 +82,38 @@ public class CSDeathMessageHud{
 
     private void renderKillTips(GuiGraphics guiGraphics) {
         long currentTime = System.currentTimeMillis();
-        int showTimeMs = BOConfig.client.messageShowTime.get() * 1000;
-        int yOffset = getHudPositionYOffset();
+        int screenWidth = minecraft.getWindow().getGuiScaledWidth();
+        int screenHeight = minecraft.getWindow().getGuiScaledHeight();
+        int maxRowWidth = maximumRowWidth(screenWidth);
 
         synchronized(queueLock) {
             messageQueue.removeIf(messageData ->
-                    currentTime - messageData.displayStartTime >= showTimeMs);
+                    currentTime - messageData.displayStartTime >= BOConfig.client.messageShowTime.get() * 1000);
 
+            if (messageQueue.isEmpty()) {
+                return;
+            }
+
+            List<RowRenderData> rows = new ArrayList<>(messageQueue.size());
+            int widestRow = 1;
             for (MessageData messageData : messageQueue) {
-                DeathMessage message = messageData.message;
-                // 宽度只计算一次，避免 renderKillMessage 内部重复计算
-                int width = calculateMessageWidth(message);
-                int x = getHudPositionXOffset(width);
+                RowRenderData row = layoutMessage(messageData.message(), maxRowWidth);
+                rows.add(row);
+                widestRow = Math.max(widestRow, row.width());
+            }
 
-                renderKillMessage(guiGraphics, message, x, yOffset, width);
-
-                yOffset += 16;
+            CSKillFeedGeometry.StackGeometry stack = CSKillFeedGeometry.stack(
+                    screenWidth,
+                    screenHeight,
+                    configuredPosition(),
+                    rows.size(),
+                    widestRow
+            );
+            int firstVisible = stack.firstVisibleIndex(rows.size());
+            for (int rowIndex = 0; rowIndex < stack.visibleRows(); rowIndex++) {
+                RowRenderData row = rows.get(firstVisible + rowIndex);
+                ScreenRect rect = stack.row(rowIndex, row.width());
+                renderKillMessage(guiGraphics, row, rect.x(), rect.y());
             }
         }
     }
@@ -106,9 +130,23 @@ public class CSDeathMessageHud{
 
     public int maxVisibleMessageWidth() {
         synchronized (queueLock) {
+            if (messageQueue.isEmpty()) {
+                return 1;
+            }
+            int screenWidth = minecraft.getWindow().getGuiScaledWidth();
+            int screenHeight = minecraft.getWindow().getGuiScaledHeight();
+            int maxRowWidth = maximumRowWidth(screenWidth);
+            CSKillFeedGeometry.StackGeometry stack = CSKillFeedGeometry.stack(
+                    screenWidth,
+                    screenHeight,
+                    configuredPosition(),
+                    messageQueue.size(),
+                    1
+            );
+            int firstVisible = stack.firstVisibleIndex(messageQueue.size());
             int max = 1;
-            for (MessageData data : messageQueue) {
-                max = Math.max(max, calculateMessageWidth(data.message));
+            for (int index = firstVisible; index < messageQueue.size(); index++) {
+                max = Math.max(max, layoutMessage(messageQueue.get(index).message(), maxRowWidth).width());
             }
             return max;
         }
@@ -121,10 +159,9 @@ public class CSDeathMessageHud{
     public void addKillMessage(DeathMessage message) {
         synchronized(queueLock) {
             long currentTime = System.currentTimeMillis();
-            int showTimeMs = BOConfig.client.messageShowTime.get() * 1000;
 
             messageQueue.removeIf(messageData ->
-                    currentTime - messageData.displayStartTime >= showTimeMs);
+                    currentTime - messageData.displayStartTime >= BOConfig.client.messageShowTime.get() * 1000);
 
             if (messageQueue.size() >= BOConfig.client.maxShowCount.get()) {
                 messageQueue.removeFirst();
@@ -134,18 +171,8 @@ public class CSDeathMessageHud{
         }
     }
 
-    private int getHudPositionYOffset() {
-        return switch (BOConfig.client.killMessageHudPosition.get()) {
-            case 1, 2 -> 10;
-            default -> minecraft.getWindow().getGuiScaledHeight() - 10 * 5;
-        };
-    }
-
-    private int getHudPositionXOffset(int stringWidth) {
-        return switch (BOConfig.client.killMessageHudPosition.get()) {
-            case 2, 4 -> minecraft.getWindow().getGuiScaledWidth() - 10 - stringWidth;
-            default -> 10;
-        };
+    private static int maximumRowWidth(int screenWidth) {
+        return Math.max(1, screenWidth - CSHudSafeAreaLayouts.KILL_FEED_MARGIN * 2);
     }
 
     public void registerSpecialKillIcon(String id, ResourceLocation texture) {
@@ -160,12 +187,14 @@ public class CSDeathMessageHud{
         return DeathMessageRules.hasDistinctAssist(assistUUID, killerUUID);
     }
 
-    private void renderKillMessage(GuiGraphics guiGraphics, DeathMessage message, int x, int y, int width) {
+    private void renderKillMessage(GuiGraphics guiGraphics, RowRenderData row, int x, int y) {
         PoseStack poseStack = guiGraphics.pose();
         Font font = minecraft.font;
+        DeathMessage message = row.message();
         UUID local = minecraft.player.getUUID();
         boolean isLocalPlayer = message.getKillerUUID().equals(local) || Objects.equals(message.getAssistUUID(), local);
 
+        int width = row.width();
         int height = 16;
         int bgColor = 0x80000000;
 
@@ -178,23 +207,16 @@ public class CSDeathMessageHud{
             guiGraphics.fill(x + width - 1, y, x + width, y + height, 0xFFFF0000);
         }
 
-        boolean isSuicide = DeathMessageRules.isSuicide(message.getDeadUUID(), message.getKillerUUID());
+        boolean isSuicide = row.suicide();
 
         int currentX = x + 5;
-        int rightPadding = x + width - 5;
 
         if (message.isBlinded()) {
             currentX = renderConditionalIcon(guiGraphics, "blindness", currentX, y);
         }
 
-        MutableComponent component = isSuicide ? message.getDead().copy() : message.getKiller().copy();
-        if(hasDistinctAssist(message.getAssistUUID(), message.getKillerUUID())){
-            component.append(" + ");
-            component.append(message.getAssist());
-        }
-
-        guiGraphics.drawString(font, component, currentX, y + 4, -1, true);
-        currentX += font.width(component) + 2;
+        guiGraphics.drawString(font, row.firstName().text(), currentX, y + 4, -1, true);
+        currentX += row.firstName().width() + 2;
 
         if(!isSuicide){
             ResourceLocation weaponIcon = message.getWeaponIcon();
@@ -229,9 +251,7 @@ public class CSDeathMessageHud{
             currentX = renderConditionalIcon(guiGraphics, iconKey, currentX, y);
         }
 
-        int deadNameWidth = font.width(message.getDead());
-        currentX = Math.min(currentX, rightPadding - deadNameWidth);
-        guiGraphics.drawString(font, message.getDead(), currentX, y + 4, -1, true);
+        guiGraphics.drawString(font, row.secondName().text(), currentX, y + 4, -1, true);
     }
 
     private int renderConditionalIcon(GuiGraphics guiGraphics, String iconKey, int currentX, int y) {
@@ -260,21 +280,32 @@ public class CSDeathMessageHud{
         RenderUtil.renderReverseTexture(guiGraphics,icon, 0, 0, 117, 44);
     }
 
-    private int calculateMessageWidth(DeathMessage message) {
+    private RowRenderData layoutMessage(DeathMessage message, int maxRowWidth) {
         Font font = minecraft.font;
-        int width = 10;
-
         boolean isSuicide = DeathMessageRules.isSuicide(message.getDeadUUID(), message.getKillerUUID());
+        MutableComponent firstName = isSuicide ? message.getDead().copy() : message.getKiller().copy();
+        if (hasDistinctAssist(message.getAssistUUID(), message.getKillerUUID())) {
+            firstName.append(" + ").append(message.getAssist());
+        }
 
+        int fixedWidth = calculateFixedWidth(message, isSuicide);
+        int availableNameWidth = Math.max(0, maxRowWidth - fixedWidth);
+        CSKillFeedGeometry.NameBudgets nameBudgets = CSKillFeedGeometry.fitNameBudgets(
+                font.width(firstName),
+                font.width(message.getDead()),
+                availableNameWidth
+        );
+        FittedText fittedFirst = fitText(font, firstName, nameBudgets.first());
+        FittedText fittedSecond = fitText(font, message.getDead(), nameBudgets.second());
+        int width = Math.min(maxRowWidth, fixedWidth + fittedFirst.width() + fittedSecond.width());
+        return new RowRenderData(message, isSuicide, fittedFirst, fittedSecond, Math.max(1, width));
+    }
+
+    private int calculateFixedWidth(DeathMessage message, boolean isSuicide) {
+        int width = 12;
         if (message.isBlinded()) {
             width += 14;
         }
-
-        MutableComponent killerComponent = isSuicide ? message.getDead().copy() : message.getKiller().copy();
-        if (hasDistinctAssist(message.getAssistUUID(), message.getKillerUUID())) {
-            killerComponent.append(" + ").append(message.getAssist());
-        }
-        width += font.width(killerComponent) + 2;
 
         if(!isSuicide){
             ResourceLocation weaponIcon = message.getWeaponIcon();
@@ -295,14 +326,45 @@ public class CSDeathMessageHud{
         }
 
         width += getPostWeaponIconKeys(message).size() * 14;
-
-        width += font.width(message.getDead());
-
         return width;
+    }
+
+    private static FittedText fitText(Font font, FormattedText text, int maxWidth) {
+        if (maxWidth <= 0) {
+            return new FittedText(FormattedCharSequence.EMPTY, 0);
+        }
+
+        FormattedText fitted = text;
+        if (font.width(text) > maxWidth) {
+            int ellipsisWidth = font.width("...");
+            if (ellipsisWidth <= maxWidth) {
+                fitted = FormattedText.composite(
+                        font.substrByWidth(text, maxWidth - ellipsisWidth),
+                        FormattedText.of("...")
+                );
+            } else {
+                fitted = font.substrByWidth(text, maxWidth);
+            }
+        }
+
+        FormattedCharSequence visual = Language.getInstance().getVisualOrder(fitted);
+        return new FittedText(visual, font.width(visual));
     }
 
     public void reset(){
         messageQueue.clear();
+    }
+
+    private record FittedText(FormattedCharSequence text, int width) {
+    }
+
+    private record RowRenderData(
+            DeathMessage message,
+            boolean suicide,
+            FittedText firstName,
+            FittedText secondName,
+            int width
+    ) {
     }
 
     public record MessageData(DeathMessage message, long displayStartTime) {

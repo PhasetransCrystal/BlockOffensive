@@ -1,8 +1,8 @@
 package com.ptcrys.blockoffensive.client.screen.hud;
 
-import com.ptcrys.blockoffensive.BOConfig;
 import com.ptcrys.blockoffensive.client.data.CSClientData;
 import com.ptcrys.fpsmatch.common.client.screen.mapselect.FPSMGuiTheme;
+import com.ptcrys.fpsmatch.core.minimap.hud.ScreenRect;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
@@ -28,7 +28,7 @@ public final class CSBombFuseHud {
     }
 
     public boolean isRendering() {
-        if (!BOConfig.client.spectatorBombHudEnabled.get()) {
+        if (!com.ptcrys.blockoffensive.BOConfig.client.spectatorBombHudEnabled.get()) {
             return false;
         }
         int fuse = CSClientData.bombFuse;
@@ -37,7 +37,12 @@ public final class CSBombFuseHud {
     }
 
     public void render(GuiGraphics graphics, int screenWidth, int screenHeight) {
-        if (!BOConfig.client.spectatorBombHudEnabled.get()) {
+        int left = (screenWidth - PANEL_WIDTH) / 2;
+        render(graphics, new ScreenRect(left, TOP_MARGIN, PANEL_WIDTH, PANEL_HEIGHT));
+    }
+
+    public void render(GuiGraphics graphics, ScreenRect bounds) {
+        if (!com.ptcrys.blockoffensive.BOConfig.client.spectatorBombHudEnabled.get()) {
             return;
         }
         int fuse = CSClientData.bombFuse;
@@ -48,10 +53,11 @@ public final class CSBombFuseHud {
         Minecraft mc = Minecraft.getInstance();
         Font font = mc.font;
 
-        int left = (screenWidth - PANEL_WIDTH) / 2;
-        int top = TOP_MARGIN;
-        int right = left + PANEL_WIDTH;
-        int bottom = top + PANEL_HEIGHT;
+        int left = bounds.x();
+        int top = bounds.y();
+        int right = bounds.right();
+        int bottom = bounds.bottom();
+        int panelWidth = bounds.width();
 
         // 临近爆炸的红色脉冲
         float fraction = Mth.clamp(fuse / (float) total, 0f, 1f);
@@ -72,7 +78,7 @@ public final class CSBombFuseHud {
         // 倒计时进度条
         int barX = left + 8;
         int barY = top + 17;
-        int barW = PANEL_WIDTH - 16;
+        int barW = panelWidth - 16;
         int barH = 3;
         graphics.fill(barX, barY, barX + barW, barY + barH, FPSMGuiTheme.SCROLL_TRACK);
         graphics.fill(barX, barY, barX + (int) (barW * fraction), barY + barH, danger);

@@ -6,6 +6,8 @@ import com.ptcrys.blockoffensive.util.BOUtil;
 import com.ptcrys.fpsmatch.common.client.FPSMClient;
 import com.ptcrys.fpsmatch.common.client.data.FPSMClientGlobalData;
 import com.ptcrys.fpsmatch.core.data.PlayerData;
+import com.ptcrys.blockoffensive.minimap.CSHudSafeAreaLayouts;
+import com.ptcrys.fpsmatch.core.minimap.hud.ScreenRect;
 import com.ptcrys.fpsmatch.util.RenderUtil;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
@@ -24,32 +26,45 @@ public class CSGameOverlay {
     public static int noColor = color(0,0,0,0);
     public static int textRoundTimeColor = color(255,255,255);
 
-    // 每帧绘制复用的静态文案（参数不变，避免每帧重建 Component）
-    private static final Component LIVING_TEXT = Component.translatable("blockoffensive.hud.living").withStyle(ChatFormatting.BOLD);
-    private static final Component TIME_PLACEHOLDER = Component.translatable("blockoffensive.hud.time_placeholder").withStyle(ChatFormatting.BOLD);
-
     private final Map<UUID,String> cachedName = new HashMap<>();
 
     public void render(GuiGraphics guiGraphics, int screenWidth, int screenHeight) {
+        Map<String, List<PlayerInfo>> teams = RenderUtil.getTeamsPlayerInfo();
+        CSHudSafeAreaLayouts.CsScoreboardLayout layout = CSHudSafeAreaLayouts.csScoreboard(
+                screenWidth,
+                screenHeight,
+                teams.getOrDefault("ct", List.of()).size(),
+                teams.getOrDefault("t", List.of()).size(),
+                CSClientData.isWaiting
+        );
+        CSHudSafeAreaLayouts.CombatInfoLayout combat = CSHudSafeAreaLayouts.combatInfo(
+                screenWidth, screenHeight, 72, 72, 20
+        );
+        render(guiGraphics, screenWidth, screenHeight, layout, Optional.of(
+                CSHudSafeAreaLayouts.money(screenWidth, screenHeight, 64, 18, combat.bounds())
+        ));
+    }
+
+    public void render(
+            GuiGraphics guiGraphics,
+            int screenWidth,
+            int screenHeight,
+            CSHudSafeAreaLayouts.CsScoreboardLayout layout,
+            Optional<CSHudSafeAreaLayouts.MoneyLayout> moneyLayout
+    ) {
         Font font = Minecraft.getInstance().font;
         FPSMClientGlobalData data = FPSMClient.getGlobalData();
-        // 计算缩放因子 (以855x480为基准)
-        float scaleFactor = Math.min(screenWidth / 855.0f, screenHeight / 480.0f);
-
-        int centerX = screenWidth / 2;
-        int startY = (int)(2 * scaleFactor);
-        int backgroundHeight = (int)(35 * scaleFactor);
-        int timeBarHeight = (int)(13 * scaleFactor);
-        int scoreBarHeight = (int)(19 * scaleFactor);
-        int boxWidth = (int)(24 * scaleFactor);
-
-        // 计算各种间距
-        int gap = (int)(2 * scaleFactor); // 统一的2px间距
-        int timeAreaWidth = (int)(20 * scaleFactor); // 16 * 1.25 = 20
-
-        // 计算存活栏位置
-        int ctBoxX = centerX - timeAreaWidth - gap - boxWidth; // 左侧存活栏
-        int tBoxX = centerX + timeAreaWidth + gap; // 右侧存活栏
+        float scaleFactor = layout.scale();
+        int centerX = layout.centerX();
+        int startY = layout.startY();
+        int backgroundHeight = layout.backgroundHeight();
+        int timeBarHeight = layout.timeBarHeight();
+        int scoreBarHeight = layout.scoreBarHeight();
+        int boxWidth = layout.boxWidth();
+        int gap = layout.gap();
+        int timeAreaWidth = layout.timeAreaWidth();
+        int ctBoxX = layout.ctBox().x();
+        int tBoxX = layout.tBox().x();
 
         // 渲染中间时间区域背景 (扩大1.25倍)
         guiGraphics.fillGradient(centerX - timeAreaWidth, startY, centerX + timeAreaWidth, startY + timeBarHeight, -1072689136, -804253680);
@@ -104,7 +119,7 @@ public class CSGameOverlay {
 
         // CT "存活" 文字
         float smallScale = numberScale * 0.5f; // 恢复为数字大小的一半
-        Component livingText = LIVING_TEXT;
+        Component livingText = Component.translatable("blockoffensive.hud.living").withStyle(ChatFormatting.BOLD);
         int smallTextWidth = font.width(livingText);
 
         guiGraphics.pose().pushPose();
@@ -230,46 +245,36 @@ public class CSGameOverlay {
             renderDemolitionProgress(guiGraphics,screenWidth,screenHeight);
         }
 
-        this.renderMoneyText(guiGraphics, screenHeight);
-
-        int avatarSize = (int)(24.0F * scaleFactor);
-        int avatarGap  = (int)(3 * scaleFactor);
-        int offset     = (int)(26.0F * scaleFactor);
-
         Map<String, List<PlayerInfo>> teamPlayers = RenderUtil.getTeamsPlayerInfo();
 
-
-        boolean showInfo = CSClientData.isWaiting;
+        boolean showInfo = layout.expandedInfo();
 
         if(teamPlayers.containsKey("ct")) {
-            renderAvatarRow(guiGraphics, teamPlayers.get("ct"),
-                    ctBoxX - offset, startY, boxWidth,
-                    avatarSize, avatarGap, true,showInfo,
-                    "ct",scaleFactor);
+            renderAvatarRow(guiGraphics, teamPlayers.get("ct"), layout.ctAvatars(), showInfo,
+                    "ct", scaleFactor);
         }
 
         if(teamPlayers.containsKey("t")) {
-            renderAvatarRow(guiGraphics, teamPlayers.get("t"),
-                    tBoxX + offset, startY, boxWidth,
-                    avatarSize, avatarGap, false,showInfo,
-                    "t",scaleFactor);
+            renderAvatarRow(guiGraphics, teamPlayers.get("t"), layout.tAvatars(), showInfo,
+                    "t", scaleFactor);
         }
+        moneyLayout.ifPresent(money -> renderMoneyText(guiGraphics, money));
     }
 
     private Component getRoundTimeString() {
         if(CSClientData.time == -1 && !CSClientData.isWaitingWinner) {
-            return TIME_PLACEHOLDER;
+            return Component.translatable("blockoffensive.hud.time_placeholder").withStyle(ChatFormatting.BOLD);
         }
         return getCSGameTime();
     }
 
     private void renderDemolitionProgress(GuiGraphics guiGraphics, int screenWidth, int screenHeight) {
         float progress = CSClientData.dismantleBombProgress;
-
-        int progressBarWidth = 150;
-        int progressBarHeight = 6;
-        int progressBarX = screenWidth / 2 - progressBarWidth / 2;
-        int progressBarY = (int) (screenHeight / 2F + 90);
+        ScreenRect progressBar = CSHudSafeAreaLayouts.demolitionProgress(screenWidth, screenHeight);
+        int progressBarWidth = progressBar.width();
+        int progressBarHeight = progressBar.height();
+        int progressBarX = progressBar.x();
+        int progressBarY = progressBar.y();
 
         drawRoundedRect(guiGraphics, progressBarX, progressBarY, progressBarWidth, progressBarHeight, 0xFF2D2D2D, 3);
 
@@ -313,23 +318,18 @@ public class CSGameOverlay {
         }
     }
 
-    private void renderMoneyText(GuiGraphics guiGraphics, int screenHeight) {
+    private void renderMoneyText(GuiGraphics guiGraphics, CSHudSafeAreaLayouts.MoneyLayout layout) {
         Font font = Minecraft.getInstance().font;
         guiGraphics.pose().pushPose();
-        guiGraphics.pose().translate(5,screenHeight - 20,0 );
-        guiGraphics.pose().scale(2,2,0);
+        guiGraphics.pose().translate(layout.bounds().x(), layout.bounds().y(), 0);
+        guiGraphics.pose().scale(layout.scale(), layout.scale(), 0);
         guiGraphics.drawString(font, "$ "+CSClientData.getMoney(), 0,0, FPSMClient.getGlobalData().isCurrentTeam("ct") ? BOUtil.CT_COLOR : BOUtil.T_COLOR);
         guiGraphics.pose().popPose();
     }
 
     private void renderAvatarRow(GuiGraphics guiGraphics,
                                  List<PlayerInfo> players,
-                                 int boxStartX,
-                                 int rowY,
-                                 int boxWidth,
-                                 int avatarSize,
-                                 int gap,
-                                 boolean leftSide,
+                                 CSHudSafeAreaLayouts.AvatarStrip avatars,
                                  boolean showNameInfo,
                                  String rowTeam,
                                  float scaleFactor
@@ -337,16 +337,13 @@ public class CSGameOverlay {
     {
         boolean isSameTeam = FPSMClient.getGlobalData().isCurrentTeam(rowTeam);
         boolean isCT = rowTeam.equals("ct");
-        if (showNameInfo) {
-            rowY += 6;
-        }
+        int rowY = avatars.y();
+        int avatarSize = avatars.avatarSize();
         Font font = Minecraft.getInstance().font;
-        for (int i=0; i<players.size(); i++) {
+        for (int i=0; i<Math.min(players.size(), avatars.count()); i++) {
             PlayerInfo player = players.get(i);
             UUID uuid = player.getProfile().getId();
-            int drawX = leftSide
-                    ? (boxStartX + boxWidth - avatarSize - 2 - i*(avatarSize+gap))
-                    : (boxStartX + 2 + i*(avatarSize+gap));
+            int drawX = avatars.xAt(i);
 
             Optional<PlayerData> data = RenderUtil.getPlayerData(player);
             boolean checked = data.isPresent();
@@ -505,7 +502,7 @@ public class CSGameOverlay {
      * @return 格式化的时间字符串，如 "01:00"
      */
     public static String formatTime(int totalSeconds) {
-        // 倒计时剩余 <=10 秒时变红
+        // 计算剩余的分钟和秒
         int remainingMinutes = totalSeconds / 60;
         int remainingSecondsPart = totalSeconds % 60;
 
@@ -515,7 +512,10 @@ public class CSGameOverlay {
             textRoundTimeColor = color(255,255,255);
         }
 
-        return BOUtil.formatMinutesSeconds(totalSeconds);
+        String minutesPart = String.format("%02d", remainingMinutes);
+        String secondsPart = String.format("%02d", remainingSecondsPart);
+
+        return minutesPart + ":" + secondsPart;
     }
 
 }

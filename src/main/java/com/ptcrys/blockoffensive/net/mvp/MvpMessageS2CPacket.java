@@ -1,11 +1,13 @@
 package com.ptcrys.blockoffensive.net.mvp;
 
 import com.ptcrys.blockoffensive.client.screen.hud.CSGameHud;
+import com.ptcrys.blockoffensive.client.screen.hud.CSMvpHud;
 
 import com.ptcrys.blockoffensive.data.MvpReason;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraftforge.network.NetworkEvent;
 
+import java.util.UUID;
 import java.util.function.Supplier;
 
 public class MvpMessageS2CPacket {
@@ -15,7 +17,11 @@ public class MvpMessageS2CPacket {
         this.mvpReason = mvpReason;
     }
     public static void encode(MvpMessageS2CPacket packet, FriendlyByteBuf buf) {
-        buf.writeUUID(packet.mvpReason.uuid);
+        // A round can legitimately end without an MVP player; preserve the banner without inventing an identity.
+        buf.writeBoolean(packet.mvpReason.uuid != null);
+        if (packet.mvpReason.uuid != null) {
+            buf.writeUUID(packet.mvpReason.uuid);
+        }
         buf.writeBoolean(packet.mvpReason.isCtWinner());
         buf.writeComponent(packet.mvpReason.getTeamName());
         buf.writeComponent(packet.mvpReason.getPlayerName());
@@ -25,7 +31,8 @@ public class MvpMessageS2CPacket {
     }
 
     public static MvpMessageS2CPacket decode(FriendlyByteBuf buf) {
-        return new MvpMessageS2CPacket(new MvpReason.Builder(buf.readUUID())
+        UUID uuid = buf.readBoolean() ? buf.readUUID() : null;
+        return new MvpMessageS2CPacket(new MvpReason.Builder(uuid)
                 .setCtWinner(buf.readBoolean())
                 .setTeamName(buf.readComponent().copy())
                 .setPlayerName(buf.readComponent().copy())

@@ -7,14 +7,17 @@ import com.ptcrys.blockoffensive.map.shop.ItemType;
 import com.ptcrys.fpsmatch.common.client.FPSMClient;
 import com.ptcrys.fpsmatch.common.client.music.FPSClientMusicManager;
 import com.ptcrys.fpsmatch.common.client.shop.ClientShopSlot;
+import com.ptcrys.fpsmatch.common.client.shop.ShopActionResultListener;
+import com.ptcrys.fpsmatch.common.packet.FPSMSoundPlayC2SPacket;
 import com.ptcrys.fpsmatch.common.packet.register.NetworkPacketRegister;
 import com.ptcrys.fpsmatch.common.packet.shop.ShopActionC2SPacket;
+import com.ptcrys.fpsmatch.common.packet.shop.ShopActionResultS2CPacket;
 import com.ptcrys.fpsmatch.common.sound.FPSMSoundRegister;
 import com.ptcrys.fpsmatch.compat.LrtacticalCompat;
 import com.ptcrys.fpsmatch.compat.gun.GunCompatManager;
-import com.ptcrys.fpsmatch.compat.gun.GunTabTypeEnum;
 import com.ptcrys.fpsmatch.compat.impl.FPSMImpl;
 import com.ptcrys.fpsmatch.core.shop.ShopAction;
+import com.ptcrys.fpsmatch.core.shop.ShopActionResult;
 import com.ptcrys.fpsmatch.util.FPSMUtil;
 import com.ptcrys.fpsmatch.util.RenderUtil;
 import com.tacz.guns.api.TimelessAPI;
@@ -36,12 +39,15 @@ import icyllis.modernui.widget.LinearLayout;
 import icyllis.modernui.widget.RelativeLayout;
 import icyllis.modernui.widget.TextView;
 import net.minecraft.client.resources.language.I18n;
+import net.minecraft.client.Minecraft;
+import net.minecraft.network.chat.Component;
 import net.minecraft.sounds.SoundEvent;
 import net.minecraft.world.item.ItemStack;
 import net.minecraftforge.fml.ModList;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.*;
+import java.util.concurrent.atomic.AtomicLong;
 
 import static icyllis.modernui.view.ViewGroup.LayoutParams.MATCH_PARENT;
 import static icyllis.modernui.view.ViewGroup.LayoutParams.WRAP_CONTENT;
@@ -53,6 +59,9 @@ public class CSGameShopScreen extends Fragment implements ScreenCallback {
     private static final String[] TOP_NAME_KEYS = new String[]{"blockoffensive.shop.title.equipment", "blockoffensive.shop.title.pistol", "blockoffensive.shop.title.mid_rank", "blockoffensive.shop.title.rifle", "blockoffensive.shop.title.throwable"};
     public static boolean refreshFlag = false;
     private static CSGameShopScreen INSTANCE;
+    private static final AtomicLong NEXT_REQUEST_ID = new AtomicLong();
+    private final Map<Long, PendingShopAction> pendingActions = new HashMap<>();
+    private AutoCloseable resultSubscription;
 
     public CSGameShopScreen() {
     }
@@ -69,7 +78,77 @@ public class CSGameShopScreen extends Fragment implements ScreenCallback {
     }
 
     public View onCreateView(@NotNull LayoutInflater inflater, ViewGroup container, DataSet savedInstanceState) {
+        closeResultSubscription();
+        resultSubscription = ShopActionResultListener.install(this::handleShopActionResult);
         return new WindowLayout(getContext());
+    }
+
+    @Override
+    public void onDestroyView() {
+        closeResultSubscription();
+        pendingActions.clear();
+        super.onDestroyView();
+    }
+
+    private void closeResultSubscription() {
+        if (resultSubscription == null) return;
+        try {
+            resultSubscription.close();
+        } catch (Exception ignored) {
+        }
+        resultSubscription = null;
+    }
+
+    private void sendShopAction(ItemType type, int index, ShopAction action) {
+        if (pendingActions.values().stream().anyMatch(pending -> pending.matches(type, index, action))) return;
+        long requestId = NEXT_REQUEST_ID.incrementAndGet();
+        pendingActions.put(requestId, new PendingShopAction(type, index, action));
+        NetworkPacketRegister.getChannelFromCache(ShopActionC2SPacket.class).sendToServer(
+                new ShopActionC2SPacket(requestId, FPSMClient.getGlobalData().getCurrentMap(), type, index, action));
+    }
+
+    private void handleShopActionResult(ShopActionResultS2CPacket packet) {
+        PendingShopAction pending = pendingActions.get(packet.requestId());
+        if (pending == null || !pending.matches(packet.type(), packet.index(), packet.action())) return;
+        pendingActions.remove(packet.requestId(), pending);
+        if (packet.result().accepted()) {
+            refreshFlag = true;
+            if (packet.action() == ShopAction.BUY) playPurchaseSound(pending.type(), pending.index());
+            return;
+        }
+        Minecraft minecraft = Minecraft.getInstance();
+        if (minecraft.player != null) {
+            Component message = Component.translatable(shopResultKey(packet.result().code()));
+            minecraft.player.displayClientMessage(message, true);
+            minecraft.getNarrator().sayNow(message);
+        }
+    }
+
+    private static String shopResultKey(ShopActionResult.Code code) {
+        return "blockoffensive.shop.result." + code.name().toLowerCase(Locale.ROOT);
+    }
+
+    private static void playPurchaseSound(ItemType type, int index) {
+        ItemStack itemStack = FPSMClient.getGlobalData().getSlotData(type.name(), index).itemStack();
+        if (GunCompatManager.isGun(itemStack)) {
+            FPSMUtil.getGunTypeByGunId(GunCompatManager.findProvider(itemStack).getGunId(itemStack))
+                    .ifPresent(gunType -> FPSClientMusicManager.playSound(FPSMSoundRegister.getGunDropSound(gunType)));
+            return;
+        }
+        SoundEvent sound = FPSMImpl.findLrtacticalMod() && LrtacticalCompat.isKnife(itemStack.getItem())
+                ? FPSMSoundRegister.getKnifeDropSound()
+                : FPSMSoundRegister.getItemDropSound(itemStack.getItem());
+        FPSClientMusicManager.playSound(sound);
+    }
+
+    private record PendingShopAction(ItemType type, int index, ShopAction action) {
+        private boolean matches(ItemType candidateType, int candidateIndex, ShopAction candidateAction) {
+            return type == candidateType && index == candidateIndex && action == candidateAction;
+        }
+
+        private boolean matches(String candidateType, int candidateIndex, ShopAction candidateAction) {
+            return type.name().equals(candidateType) && index == candidateIndex && action == candidateAction;
+        }
     }
 
     public static class WindowLayout extends RelativeLayout {
@@ -502,7 +581,7 @@ public class CSGameShopScreen extends Fragment implements ScreenCallback {
                 }
             };
             returnGoodsLayout.addView(returnGoodsText);
-            returnGoodsLayout.setOnClickListener((l) -> NetworkPacketRegister.getChannelFromCache(ShopActionC2SPacket.class).sendToServer(new ShopActionC2SPacket(FPSMClient.getGlobalData().getCurrentMap(), this.type, this.index, ShopAction.RETURN)));
+            returnGoodsLayout.setOnClickListener((l) -> CSGameShopScreen.getInstance().sendShopAction(this.type, this.index, ShopAction.RETURN));
             returnGoodsLayout.setEnabled(false);
             addView(returnGoodsLayout);
 
@@ -539,22 +618,7 @@ public class CSGameShopScreen extends Fragment implements ScreenCallback {
             setOnClickListener((v) -> {
                 boolean enable = CSClientData.canOpenShop && CSClientData.getMoney() >= currentSlot.cost() && !currentSlot.itemStack().isEmpty() && !currentSlot.isLocked();
                 if (enable){
-                    NetworkPacketRegister.getChannelFromCache(ShopActionC2SPacket.class).sendToServer(new ShopActionC2SPacket(FPSMClient.getGlobalData().getCurrentMap(), this.type, this.index, ShopAction.BUY));
-                    ItemStack itemStack = currentSlot.itemStack();
-                    if (GunCompatManager.isGun(itemStack)) {
-                        Optional<GunTabTypeEnum> t = FPSMUtil.getGunTypeByGunId(GunCompatManager.findProvider(itemStack).getGunId(itemStack));
-                        t.ifPresent(t1 -> {
-                            FPSClientMusicManager.playSound(FPSMSoundRegister.getGunDropSound(t1));
-                        });
-                    } else {
-                        SoundEvent sound;
-                        if(FPSMImpl.findLrtacticalMod() && LrtacticalCompat.isKnife(itemStack.getItem())){
-                            sound = FPSMSoundRegister.getKnifeDropSound();
-                        }else{
-                            sound = FPSMSoundRegister.getItemDropSound(itemStack.getItem());
-                        }
-                        FPSClientMusicManager.playSound(sound);
-                    }
+                    CSGameShopScreen.getInstance().sendShopAction(this.type, this.index, ShopAction.BUY);
                 }
             });
         }

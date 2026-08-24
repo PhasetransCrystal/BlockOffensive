@@ -15,8 +15,6 @@ import com.ptcrys.blockoffensive.net.PxRagdollRemovalCompatS2CPacket;
 import com.ptcrys.blockoffensive.net.shop.ShopStatesS2CPacket;
 import com.ptcrys.blockoffensive.net.spec.CSGameWeaponDataS2CPacket;
 import com.ptcrys.blockoffensive.sound.BOSoundRegister;
-import com.ptcrys.blockoffensive.net.spec.SpectatorRosterS2CPacket;
-import com.ptcrys.blockoffensive.net.vote.VoteSyncS2CPacket;
 import com.ptcrys.blockoffensive.spectator.BOSpecManager;
 import com.ptcrys.blockoffensive.util.BOUtil;
 import com.ptcrys.fpsmatch.FPSMatch;
@@ -118,8 +116,7 @@ public abstract class CSMap extends BaseRoundMap<String, CSRoundResultReason> {
 
     private final Map<UUID, ShopStateSnapshot> lastShopStates = new HashMap<>();
 
-    private int rosterSyncTick = 0;
-    private int lastRosterSig = 0;
+    private final CSSpectatorRosterSync spectatorRosterSync = new CSSpectatorRosterSync();
 
     private record ShopStateSnapshot(boolean canOpenShop, int nextRoundMoney, int closeTime) {}
 
@@ -203,37 +200,7 @@ public abstract class CSMap extends BaseRoundMap<String, CSRoundResultReason> {
      * 每秒同步一次观战者名单给观战者；仅在名单发生变化时才实际广播，降低带宽开销。
      */
     private void rosterSyncLogic() {
-        if (++this.rosterSyncTick < 20) {
-            return;
-        }
-        this.rosterSyncTick = 0;
-
-        Set<UUID> specs = new java.util.HashSet<>(this.getMapTeams().getSpecPlayers());
-        if (specs.isEmpty()) {
-            return;
-        }
-        List<String> names = new ArrayList<>();
-        int sig = 1;
-        for (UUID uuid : specs) {
-            var opt = FPSMCore.getInstance().getPlayerByUUID(uuid);
-            if (opt.isPresent()) {
-                String name = opt.get().getGameProfile().getName();
-                names.add(name);
-                sig = sig * 31 + name.hashCode();
-            }
-        }
-        names.sort(String::compareToIgnoreCase);
-        if (sig == this.lastRosterSig) {
-            return;
-        }
-        this.lastRosterSig = sig;
-
-        SpectatorRosterS2CPacket packet =
-                new SpectatorRosterS2CPacket(names);
-        for (UUID uuid : specs) {
-            FPSMCore.getInstance().getPlayerByUUID(uuid).ifPresent(player ->
-                    FPSMatch.sendToPlayer(player, packet));
-        }
+        spectatorRosterSync.tick(this);
     }
 
     @Override
@@ -511,14 +478,14 @@ public abstract class CSMap extends BaseRoundMap<String, CSRoundResultReason> {
             boolean voteEnded = this.voteObj.tick();
 
             if (!voteEnded) {
-                long remainingNow = this.voteObj.getRemainingTime();
-                // 仅在剩余秒数变化时推送一次倒计时文本与 HUD 同步，避免每个 tick 刷屏
-                if (remainingNow != remainingBefore) {
-                    this.sendAllPlayerMessage(
-                            Component.translatable("blockoffensive.map.vote.timer", remainingNow)
-                                    .withStyle(ChatFormatting.DARK_AQUA),
-                            true
-                    );
+                // 投票仍在进行中，显示剩余时间
+                this.sendAllPlayerMessage(
+                        Component.translatable("blockoffensive.map.vote.timer", this.voteObj.getRemainingTime())
+                                .withStyle(ChatFormatting.DARK_AQUA),
+                        true
+                );
+                // 每秒同步一次投票 HUD 状态
+                if (this.voteObj.getRemainingTime() != remainingBefore) {
                     this.broadcastVoteSync(this.voteObj, 0);
                 }
             } else {
@@ -543,13 +510,13 @@ public abstract class CSMap extends BaseRoundMap<String, CSRoundResultReason> {
         int eligible = vote.getEligiblePlayerCount();
         int notVoted = Math.max(0, eligible - vote.getOnlineVotedCount());
         boolean active = result == 0;
-        VoteSyncS2CPacket packet =
-                new VoteSyncS2CPacket(
+        com.ptcrys.blockoffensive.net.vote.VoteSyncS2CPacket packet =
+                new com.ptcrys.blockoffensive.net.vote.VoteSyncS2CPacket(
                         active, vote.getVoteTitle(), (int) vote.getRemainingTime(),
                         agree, disagree, notVoted, eligible, vote.getRequiredPercent(), result);
         for (UUID uuid : vote.getEligiblePlayers()) {
             this.getPlayerByUUID(uuid).ifPresent(player ->
-                    FPSMatch.sendToPlayer(player, packet));
+                    com.ptcrys.fpsmatch.FPSMatch.sendToPlayer(player, packet));
         }
     }
 
@@ -771,8 +738,6 @@ public abstract class CSMap extends BaseRoundMap<String, CSRoundResultReason> {
      * 同步游戏设置到客户端（比分/时间等）
      * @see CSGameSettingsS2CPacket
      */
-    private int syncHeavyTicker = 0;
-
     public void syncToClient(boolean syncWeapon) {
         ServerTeam ct = this.getCT();
         ServerTeam t = this.getT();
@@ -792,15 +757,12 @@ public abstract class CSMap extends BaseRoundMap<String, CSRoundResultReason> {
         this.sendPacketToAllPlayer(packet);
 
         if(isStart){
-            // 商店/武器数据不要求 20Hz，降到每 2 tick 同步一次，减少每帧重复序列化与发包开销
-            if ((++syncHeavyTicker & 1) == 0) {
-                if (shouldSyncShopInfoWithMapInfo()) {
-                    syncShopInfo();
-                }
+            if (shouldSyncShopInfoWithMapInfo()) {
+                syncShopInfo();
+            }
 
-                if(syncWeapon){
-                    syncWeaponData();
-                }
+            if(syncWeapon){
+                syncWeaponData();
             }
         }
     }
@@ -829,10 +791,6 @@ public abstract class CSMap extends BaseRoundMap<String, CSRoundResultReason> {
     public void syncShopInfo(ServerTeam team, ServerPlayer player, boolean enable, int closeTime){
         var packet = new ShopStatesS2CPacket(enable,getNextRoundMinMoney(team),closeTime);
         this.sendPacketToJoinedPlayer(player,packet,false);
-        // 商店可用时一并同步该玩家自身的金钱，避免打开商店时经济/阵营显示陈旧（此前只有点击购买触发回包才会刷新）
-        if (enable) {
-            ShopCapability.getShop(team).ifPresent(shop -> shop.syncShopMoneyData(player));
-        }
     }
 
     public void syncWeaponData(){
@@ -898,6 +856,7 @@ public abstract class CSMap extends BaseRoundMap<String, CSRoundResultReason> {
     @Override
     public void reset() {
         super.reset();
+        spectatorRosterSync.reset();
         this.cleanupMap();
         this.getMapTeams().getJoinedPlayersWithSpec().forEach((uuid -> this.getPlayerByUUID(uuid).ifPresent(player->{
             this.getServerLevel().getServer().getScoreboard().removePlayerFromTeam(player.getScoreboardName());

@@ -1,6 +1,11 @@
 package com.ptcrys.blockoffensive.minimap;
 
+import com.ptcrys.fpsmatch.core.minimap.extension.MarkerPresentation;
+import com.ptcrys.fpsmatch.core.minimap.model.DisplayLabel;
 import com.ptcrys.fpsmatch.core.minimap.model.NamespacedId;
+import com.ptcrys.fpsmatch.core.minimap.model.RgbaColor;
+import com.ptcrys.fpsmatch.core.minimap.model.TextAppearance;
+import com.ptcrys.fpsmatch.core.minimap.region.RegionPresentation;
 
 import java.util.List;
 import java.util.Objects;
@@ -10,6 +15,11 @@ import java.util.Objects;
  * FPSMatch fallback markers remain usable when BO assets are absent.
  */
 public final class CSMinimapAssetCatalog {
+    public static final NamespacedId STYLE_SELF = NamespacedId.parse("blockoffensive:style/self");
+    public static final NamespacedId STYLE_ALLY = NamespacedId.parse("blockoffensive:style/ally");
+    public static final NamespacedId STYLE_ENEMY = NamespacedId.parse("blockoffensive:style/enemy");
+    public static final NamespacedId STYLE_DEATH = NamespacedId.parse("blockoffensive:style/death");
+
     public record MarkerAsset(NamespacedId styleId, NamespacedId typeId, String texturePath, String translationKey) {
         public MarkerAsset {
             Objects.requireNonNull(styleId, "styleId");
@@ -23,6 +33,11 @@ public final class CSMinimapAssetCatalog {
             if (!translationKey.startsWith("blockoffensive.minimap.")) {
                 throw new IllegalArgumentException("translationKey must be BO minimap key");
             }
+        }
+
+        public NamespacedId textureId() {
+            return NamespacedId.parse(texturePath
+                    .replace("assets/blockoffensive/", "blockoffensive:"));
         }
     }
 
@@ -69,5 +84,52 @@ public final class CSMinimapAssetCatalog {
                 MARKERS.stream().map(MarkerAsset::translationKey),
                 EXTRA_TRANSLATION_KEYS.stream()
         ).toList();
+    }
+
+    public static List<MarkerPresentation> markerPresentations() {
+        return MARKERS.stream()
+                .map(asset -> new MarkerPresentation(
+                        asset.typeId(),
+                        asset.styleId(),
+                        asset.textureId(),
+                        DisplayLabel.translation(asset.translationKey()),
+                        1.0
+                ))
+                .toList();
+    }
+
+    public static List<RegionPresentation> regionPresentations() {
+        TextAppearance label = new TextAppearance(
+                new RgbaColor(245, 248, 250, 255), 1.0
+        );
+        return List.of(
+                regionPresentation(
+                        CSGameMinimapRegionProvider.SEMANTIC_MAP_BOUNDARY,
+                        "blockoffensive:style/map_boundary", label
+                ),
+                regionPresentation(
+                        CSGameMinimapRegionProvider.SEMANTIC_BOMB_SITE,
+                        "blockoffensive:style/site", label
+                ),
+                regionPresentation(
+                        CSGameMinimapRegionProvider.SEMANTIC_SPAWN,
+                        "blockoffensive:style/spawn", label
+                ),
+                regionPresentation(
+                        CSGameMinimapRegionProvider.SEMANTIC_SHOP,
+                        "blockoffensive:style/shop", label
+                )
+        );
+    }
+
+    private static RegionPresentation regionPresentation(
+            String semanticType,
+            String styleId,
+            TextAppearance label
+    ) {
+        return new RegionPresentation(
+                NamespacedId.parse(semanticType), NamespacedId.parse(styleId),
+                label, 0, 64
+        );
     }
 }

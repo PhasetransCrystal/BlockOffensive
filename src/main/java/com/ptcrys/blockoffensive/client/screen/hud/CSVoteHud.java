@@ -2,6 +2,7 @@ package com.ptcrys.blockoffensive.client.screen.hud;
 
 import com.ptcrys.blockoffensive.net.vote.VoteSyncS2CPacket;
 import com.ptcrys.fpsmatch.common.client.screen.mapselect.FPSMGuiTheme;
+import com.ptcrys.fpsmatch.core.minimap.hud.ScreenRect;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
@@ -90,6 +91,11 @@ public final class CSVoteHud {
     }
 
     public void render(GuiGraphics graphics, int screenWidth, int screenHeight) {
+        int left = (screenWidth - PANEL_WIDTH) / 2;
+        render(graphics, new ScreenRect(left, TOP_MARGIN, PANEL_WIDTH, PANEL_HEIGHT));
+    }
+
+    public void render(GuiGraphics graphics, ScreenRect bounds) {
         if (!shouldRender()) {
             return;
         }
@@ -108,10 +114,12 @@ public final class CSVoteHud {
             return;
         }
 
-        int left = (screenWidth - PANEL_WIDTH) / 2;
-        int top = TOP_MARGIN;
-        int right = left + PANEL_WIDTH;
-        int bottom = top + PANEL_HEIGHT;
+        int left = bounds.x();
+        int top = bounds.y();
+        int right = bounds.right();
+        int bottom = bounds.bottom();
+        int panelWidth = bounds.width();
+        int panelHeight = bounds.height();
 
         int accent = switch (result) {
             case 1 -> FPSMGuiTheme.ST_WAITING;         // 通过：绿
@@ -136,7 +144,7 @@ public final class CSVoteHud {
         // 倒计时进度条
         int barX = left + 8;
         int barY = top + 20;
-        int barW = PANEL_WIDTH - 16;
+        int barW = panelWidth - 16;
         int barH = 4;
         float timeFrac = result != 0 ? 0f : Mth.clamp((remainingSeconds - (now - lastUpdateMs) / 1000f) / totalSeconds, 0f, 1f);
         graphics.fill(barX, barY, barX + barW, barY + barH, withAlpha(FPSMGuiTheme.SCROLL_TRACK, a));
@@ -160,7 +168,7 @@ public final class CSVoteHud {
 
         // 文本：同意/反对/未投
         Component counts = Component.translatable("blockoffensive.vote.hud.counts", agree, disagree, notVoted);
-        graphics.drawString(font, counts, left + 8, top + 40, withAlpha(FPSMGuiTheme.TEXT_BODY, a), false);
+        graphics.drawString(font, counts, left + 8, top + Math.min(40, panelHeight - 20), withAlpha(FPSMGuiTheme.TEXT_BODY, a), false);
 
         // 提示或结果
         Component footer = switch (result) {
@@ -168,7 +176,7 @@ public final class CSVoteHud {
             case 2 -> Component.translatable("blockoffensive.vote.hud.reject");
             default -> Component.translatable("blockoffensive.vote.hud.hint");
         };
-        graphics.drawString(font, footer, left + 8, top + 50, withAlpha(result == 0 ? FPSMGuiTheme.TEXT_MUTED : accent, a), false);
+        graphics.drawString(font, footer, left + 8, top + Math.min(50, panelHeight - 10), withAlpha(result == 0 ? FPSMGuiTheme.TEXT_MUTED : accent, a), false);
     }
 
     private static void drawBorder(GuiGraphics g, int left, int top, int right, int bottom, int color) {

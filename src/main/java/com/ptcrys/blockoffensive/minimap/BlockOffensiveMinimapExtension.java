@@ -1,8 +1,11 @@
 package com.ptcrys.blockoffensive.minimap;
 
 import com.ptcrys.fpsmatch.core.minimap.extension.MinimapExtensionRegistry;
+import com.ptcrys.fpsmatch.core.minimap.extension.MarkerPresentation;
 import com.ptcrys.fpsmatch.core.minimap.extension.MinimapGameplayExtension;
 import com.ptcrys.fpsmatch.core.minimap.marker.MinimapMarkerProvider;
+import com.ptcrys.fpsmatch.core.minimap.region.MinimapRegionProvider;
+import com.ptcrys.fpsmatch.core.minimap.region.RegionPresentation;
 import com.ptcrys.fpsmatch.core.minimap.marker.MinimapVisibilityPolicy;
 import com.ptcrys.fpsmatch.core.minimap.model.MapKey;
 
@@ -34,18 +37,49 @@ public final class BlockOffensiveMinimapExtension implements MinimapGameplayExte
 
     @Override
     public boolean supports(MapKey mapKey) {
-        String gameType = mapKey.gameType();
-        return "cs".equals(gameType) || "csdm".equals(gameType);
+        return BlockOffensiveMinimapRuntime.supports(mapKey);
+    }
+
+    @Override
+    public Optional<com.ptcrys.fpsmatch.core.minimap.marker.MinimapViewerContext> viewerContext(
+            MapKey mapKey,
+            java.util.UUID actorId
+    ) {
+        return supports(mapKey)
+                ? BlockOffensiveMinimapRuntime.viewerContext(mapKey, actorId)
+                : Optional.empty();
     }
 
     @Override
     public List<MinimapMarkerProvider> markerProviders(MapKey mapKey) {
-        // Map-scoped providers attach via map mount/runtime; extension remains common-safe.
-        return List.of();
+        return supports(mapKey)
+                ? BlockOffensiveMinimapRuntime.markerProviders(mapKey)
+                : List.of();
+    }
+
+    @Override
+    public List<MarkerPresentation> markerPresentations(MapKey mapKey) {
+        return supports(mapKey) ? CSMinimapAssetCatalog.markerPresentations() : List.of();
     }
 
     @Override
     public Optional<MinimapVisibilityPolicy> visibilityPolicy(MapKey mapKey) {
-        return Optional.empty();
+        return supports(mapKey)
+                ? BlockOffensiveMinimapRuntime.visibilityPolicy(mapKey)
+                : Optional.empty();
+    }
+
+    @Override
+    public List<MinimapRegionProvider> regionProviders(MapKey mapKey) {
+        return supports(mapKey)
+                ? BlockOffensiveMinimapRuntime.regionProviders(mapKey)
+                : List.of();
+    }
+
+    @Override
+    public List<RegionPresentation> regionPresentations(MapKey mapKey) {
+        return supports(mapKey)
+                ? CSMinimapAssetCatalog.regionPresentations()
+                : List.of();
     }
 }

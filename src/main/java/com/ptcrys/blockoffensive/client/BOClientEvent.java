@@ -3,35 +3,38 @@ package com.ptcrys.blockoffensive.client;
 import com.ptcrys.blockoffensive.BOConfig;
 import com.ptcrys.blockoffensive.BlockOffensive;
 import com.ptcrys.blockoffensive.client.data.CSClientData;
-import com.ptcrys.blockoffensive.client.key.OpenShopKey;
-import com.ptcrys.blockoffensive.client.screen.CSGameShopScreen;
 import com.ptcrys.blockoffensive.client.screen.hud.CSGameHud;
 import com.ptcrys.blockoffensive.net.dm.PlayerMoveC2SPacket;
 import com.ptcrys.blockoffensive.util.BOUtil;
+import com.ptcrys.blockoffensive.util.ThrowableType;
 import com.ptcrys.blockoffensive.web.BOClientWebServer;
 import com.ptcrys.blockoffensive.compat.BOImpl;
 import com.ptcrys.fpsmatch.FPSMatch;
 import com.ptcrys.fpsmatch.common.client.FPSMClient;
 import com.ptcrys.fpsmatch.common.client.data.FPSMClientGlobalData;
 import com.ptcrys.fpsmatch.common.client.event.FPSMClientResetEvent;
+import com.ptcrys.fpsmatch.common.drop.ThrowableRegistry;
 import com.ptcrys.fpsmatch.common.event.FPSMThrowGrenadeEvent;
 import com.ptcrys.fpsmatch.common.event.RequestSpectatorOutlinesEvent;
+import com.ptcrys.fpsmatch.common.packet.FPSMSoundPlayC2SPacket;
 import com.ptcrys.fpsmatch.compat.CounterStrikeGrenadesCompat;
 import com.ptcrys.fpsmatch.compat.LrtacticalCompat;
 import com.ptcrys.fpsmatch.compat.gun.GunCompatManager;
 import com.ptcrys.fpsmatch.compat.impl.FPSMImpl;
 import com.ptcrys.fpsmatch.core.item.IThrowEntityAble;
 import com.ptcrys.fpsmatch.core.team.ClientTeam;
-import icyllis.modernui.mc.MuiScreen;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.Options;
 import net.minecraft.client.player.Input;
 import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.sounds.SoundEvent;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.client.event.InputEvent;
 import net.minecraftforge.client.event.MovementInputUpdateEvent;
+import net.minecraftforge.client.event.RenderNameTagEvent;
 import net.minecraftforge.client.event.RenderGuiOverlayEvent;
 import net.minecraftforge.client.gui.overlay.VanillaGuiOverlay;
 import net.minecraftforge.event.TickEvent;
@@ -59,8 +62,6 @@ public class BOClientEvent {
         Minecraft mc = Minecraft.getInstance();
         lockMove(mc);
 
-        checkOption(mc);
-
         if(BOConfig.common.webServerEnabled.get()){
             if(!(!data.isInMap() || !data.isInGame()) && data.isSpectator()) {
                 BOClientWebServer.start();
@@ -79,18 +80,13 @@ public class BOClientEvent {
         event.setCanceled(FPSMClient.getGlobalData().getCurrentClientTeam().map(ClientTeam::isNormal).orElse(false));
     }
 
-    // 空包仅用于向服务端标记"玩家正在移动"，无需每 tick 发送；
-    // 每 2 tick 发一次即可，大幅降低移动时的无效网络往返。
-    private static int movePacketTickCounter = 0;
-
     @SubscribeEvent
     public static void onPlayerMoveInput(MovementInputUpdateEvent event) {
         if(Minecraft.getInstance().player == null) return;
         Input input = event.getInput();
         if(!FPSMClient.getGlobalData().isCurrentGameType("csdm")) return;
 
-        if ((input.left || input.right || input.up || input.down || input.shiftKeyDown)
-                && (++movePacketTickCounter & 1) == 0) {
+        if (input.left || input.right || input.up || input.down || input.shiftKeyDown) {
             FPSMatch.sendToServer(new PlayerMoveC2SPacket());
         }
     }
@@ -100,16 +96,6 @@ public class BOClientEvent {
         BOUtil.buildGrenadeMessageAndSend(event.getItemStack());
     }
 
-    public static void checkOption(Minecraft mc){
-        if(OpenShopKey.getLastGuiScaleOption() == -1) return;
-        boolean isShop = mc.screen instanceof MuiScreen muiScreen && muiScreen.getFragment() instanceof CSGameShopScreen;
-        if(!isShop && OpenShopKey.getLastGuiScaleOption() != mc.options.guiScale().get()){
-            mc.options.guiScale().set(OpenShopKey.getLastGuiScaleOption());
-            mc.resizeDisplay();
-            OpenShopKey.resetLastGuiScaleOption();
-        }
-    }
-    
     public static void lockMove(Minecraft mc){
         LocalPlayer player = mc.player;
         if(player == null) return;

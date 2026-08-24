@@ -3,6 +3,7 @@ package com.ptcrys.blockoffensive.client.key;
 import com.mojang.blaze3d.platform.InputConstants;
 import com.ptcrys.blockoffensive.BlockOffensive;
 import com.ptcrys.blockoffensive.net.bomb.BombActionC2SPacket;
+import com.ptcrys.fpsmatch.FPSMatch;
 import net.minecraft.client.KeyMapping;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.api.distmarker.OnlyIn;
@@ -23,17 +24,15 @@ public class DismantleBombKey {
             InputConstants.Type.KEYSYM,
             GLFW.GLFW_KEY_E,
             "key.category.blockoffensive");
+    private static final DismantleInputEdge INPUT_EDGE = new DismantleInputEdge();
 
     @SubscribeEvent
     public static void onInspectPress(InputEvent.Key event) {
-        boolean inGame = GunCompatManager.isInGame();
-        if(inGame && DISMANTLE_BOMB_KEY.isDown()){
-            if (event.getAction() == GLFW.GLFW_PRESS) {
-                BlockOffensive.INSTANCE.sendToServer(new BombActionC2SPacket(true));
-            } else if (event.getAction() == GLFW.GLFW_RELEASE) {
-                BlockOffensive.INSTANCE.sendToServer(new BombActionC2SPacket(false));
-            }
-        }
+        INPUT_EDGE.accept(
+                DISMANTLE_BOMB_KEY.matches(event.getKey(), event.getScanCode()),
+                event.getAction(),
+                GunCompatManager.isInGame()
+        ).ifPresent(action -> BlockOffensive.INSTANCE.sendToServer(new BombActionC2SPacket(action)));
     }
 
 }

@@ -30,16 +30,6 @@ public class OpenShopKey {
             GLFW.GLFW_KEY_B,
             "key.category.blockoffensive");
 
-    public static int lastGuiScaleOption = -1;
-
-    public static int getLastGuiScaleOption(){
-        return lastGuiScaleOption;
-    }
-
-    public static void resetLastGuiScaleOption(){
-        lastGuiScaleOption = -1;
-    }
-
     @SubscribeEvent
     public static void onInspectPress(InputEvent.Key event) {
         if (Minecraft.getInstance().screen != null) return;
@@ -72,13 +62,6 @@ public class OpenShopKey {
     }
 
     private static void openShop(){
-        Minecraft minecraft = Minecraft.getInstance();
-        int guiScaleOption = minecraft.options.guiScale().get();
-        if(guiScaleOption != 2) {
-            lastGuiScaleOption = guiScaleOption;
-            minecraft.options.guiScale().set(2);
-            minecraft.resizeDisplay();
-        }
         MuiForgeApi.openScreen(CSGameShopScreen.getInstance());
     }
 }

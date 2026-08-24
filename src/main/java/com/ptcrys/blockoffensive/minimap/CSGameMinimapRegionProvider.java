@@ -43,7 +43,8 @@ public final class CSGameMinimapRegionProvider implements MinimapRegionProvider 
     public List<RuntimeRegionDescriptor> collect(MapKey mapKey, String defaultFloorId) {
         Objects.requireNonNull(mapKey, "mapKey");
         Objects.requireNonNull(defaultFloorId, "defaultFloorId");
-        if (!"cs".equals(mapKey.gameType())) {
+        boolean demolition = "cs".equals(mapKey.gameType());
+        if (!demolition && !"csdm".equals(mapKey.gameType())) {
             return List.of();
         }
         List<RuntimeRegionDescriptor> out = new ArrayList<>();
@@ -53,21 +54,23 @@ public final class CSGameMinimapRegionProvider implements MinimapRegionProvider 
                 "Map",
                 SEMANTIC_MAP_BOUNDARY,
                 List.of(),
-                Optional.empty(),
+                Optional.of("fpsmatch:map/boundary"),
                 bounds,
                 10
         )));
-        for (BombSiteDefinition site : bombSites.get()) {
-            out.add(new RuntimeRegionDescriptor(
-                    site.id(),
-                    defaultFloorId,
-                    site.displayName().orElse(site.id()),
-                    SEMANTIC_BOMB_SITE,
-                    List.of("fpsmatch:tag/objective"),
-                    Optional.of("fpsmatch:gameplay/" + site.id()),
-                    site.bounds(),
-                    100
-            ));
+        if (demolition) {
+            for (BombSiteDefinition site : bombSites.get()) {
+                out.add(new RuntimeRegionDescriptor(
+                        site.id(),
+                        defaultFloorId,
+                        site.displayName().orElse(site.id()),
+                        SEMANTIC_BOMB_SITE,
+                        List.of("fpsmatch:tag/objective"),
+                        Optional.of("fpsmatch:gameplay/" + site.id()),
+                        site.bounds(),
+                        100
+                ));
+            }
         }
         for (TeamRegionSource spawn : spawnRegions.get()) {
             out.add(new RuntimeRegionDescriptor(
@@ -76,7 +79,7 @@ public final class CSGameMinimapRegionProvider implements MinimapRegionProvider 
                     "Spawn " + spawn.teamId(),
                     SEMANTIC_SPAWN,
                     List.of("fpsmatch:tag/spawn"),
-                    Optional.of("fpsmatch:team/" + spawn.teamId()),
+                    Optional.of("fpsmatch:spawn/team/" + spawn.teamId()),
                     spawn.bounds(),
                     50
             ));
@@ -88,7 +91,7 @@ public final class CSGameMinimapRegionProvider implements MinimapRegionProvider 
                     "Shop " + shop.teamId(),
                     SEMANTIC_SHOP,
                     List.of("fpsmatch:tag/shop"),
-                    Optional.of("fpsmatch:team/" + shop.teamId()),
+                    Optional.of("fpsmatch:shop/team/" + shop.teamId()),
                     shop.bounds(),
                     40
             ));

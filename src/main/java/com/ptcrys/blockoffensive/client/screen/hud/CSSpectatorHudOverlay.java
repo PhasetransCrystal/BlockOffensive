@@ -26,7 +26,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 import static com.ptcrys.fpsmatch.util.RenderUtil.*;
-import static net.minecraft.util.Mth.*;
+import static net.minecraft.util.Mth.clamp;
 
 /**
  * 观察者模式下的玩家信息HUD渲染器
@@ -122,6 +122,32 @@ public final class CSSpectatorHudOverlay {
 
     public static float currentSlideYPixels() {
         return slideYPixels;
+    }
+
+    /** Clear spectator-only projection state at the player/spectator mode boundary. */
+    public void reset() {
+        lastTargetUuid = null;
+        lastTargetPlayer = null;
+        currentCardLocation = null;
+        currentCardTexture = null;
+        previousCardLocation = null;
+        previousCardTexture = null;
+        lastFrameTimeNs = 0L;
+        visibilityAlpha = 0f;
+        slideYPixels = 12f;
+        currentCardAlpha = 0f;
+        previousCardAlpha = 0f;
+        shownHealth = 0f;
+        targetHealth = 0f;
+        shownMaxHealth = 0f;
+        targetMaxHealth = 0f;
+        shownHeadshotRate = 0f;
+        targetHeadshotRate = 0f;
+        shownKills = 0f;
+        targetKills = 0f;
+        shownHeadshots = 0f;
+        targetHeadshots = 0f;
+        deltaTime = 0f;
     }
 
     public void render(GuiGraphics guiGraphics) {

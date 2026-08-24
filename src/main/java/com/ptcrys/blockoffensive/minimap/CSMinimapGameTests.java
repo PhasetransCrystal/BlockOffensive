@@ -1,5 +1,9 @@
 package com.ptcrys.blockoffensive.minimap;
 
+import com.ptcrys.fpsmatch.core.minimap.extension.MinimapExtensionRegistry;
+import com.ptcrys.fpsmatch.core.minimap.model.MapKey;
+import com.ptcrys.fpsmatch.core.minimap.model.NamespacedId;
+import com.ptcrys.fpsmatch.core.minimap.region.RegionPresentation;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraftforge.gametest.GameTestHolder;
@@ -44,6 +48,44 @@ public final class CSMinimapGameTests {
         }
         if (CSMapMinimapMarkerProvider.CS_DEATH_TTL_TICKS != 100L) {
             helper.fail("CS death TTL must be 100");
+            return;
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = "empty")
+    public static void csCsdmRegionPresentationRegistryMatrix(GameTestHelper helper) {
+        BlockOffensiveMinimapExtension.register();
+        java.util.Map<NamespacedId, NamespacedId> expected = java.util.Map.of(
+                NamespacedId.parse("fpsmatch:region/map_boundary"),
+                NamespacedId.parse("blockoffensive:style/map_boundary"),
+                NamespacedId.parse("fpsmatch:region/bomb_site"),
+                NamespacedId.parse("blockoffensive:style/site"),
+                NamespacedId.parse("fpsmatch:region/spawn"),
+                NamespacedId.parse("blockoffensive:style/spawn"),
+                NamespacedId.parse("fpsmatch:region/shop"),
+                NamespacedId.parse("blockoffensive:style/shop")
+        );
+        for (MapKey key : java.util.List.of(
+                new MapKey("cs", "de_dust2"),
+                new MapKey("csdm", "de_dust2")
+        )) {
+            java.util.List<RegionPresentation> actual =
+                    MinimapExtensionRegistry.regionPresentations(key);
+            java.util.Map<NamespacedId, NamespacedId> actualStyles = actual.stream()
+                    .collect(java.util.stream.Collectors.toMap(
+                            RegionPresentation::semanticType,
+                            RegionPresentation::styleId
+                    ));
+            if (!actualStyles.equals(expected)) {
+                helper.fail("region presentation mapping mismatch for " + key.gameType());
+                return;
+            }
+        }
+        if (!MinimapExtensionRegistry.regionPresentations(
+                new MapKey("tdm", "arena")
+        ).isEmpty()) {
+            helper.fail("unsupported game type exposed BO region presentations");
             return;
         }
         helper.succeed();

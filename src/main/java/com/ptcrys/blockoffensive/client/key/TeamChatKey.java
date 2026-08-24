@@ -25,8 +25,12 @@ public class TeamChatKey {
 
     @SubscribeEvent
     public static void onTeamChatPress(TickEvent.ClientTickEvent event) {
-        if(event.phase == TickEvent.Phase.END && TEAM_CHAT_KEY.isDown()) {
-            Minecraft.getInstance().setScreen(new TeamChatScreen());
+        if (event.phase != TickEvent.Phase.END) {
+            return;
+        }
+        Minecraft minecraft = Minecraft.getInstance();
+        if (TeamChatInputEdge.consumeAndShouldOpen(TEAM_CHAT_KEY::consumeClick, () -> minecraft.screen != null)) {
+            minecraft.setScreen(new TeamChatScreen());
         }
     }
 }

@@ -3,6 +3,7 @@ package com.ptcrys.blockoffensive.net;
 import com.ptcrys.blockoffensive.client.screen.hud.CSGameHud;
 import com.ptcrys.blockoffensive.data.DeathMessage;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
@@ -73,9 +74,12 @@ public class DeathMessageS2CPacket {
     public void handle(Supplier<NetworkEvent.Context> ctx) {
         ctx.get().enqueueWork(() -> {
             CSGameHud.getInstance().getDeathMessageHud().addKillMessage(deathMessage);
-            boolean isLocalKill = Minecraft.getInstance().player != null &&
-                    deathMessage.getKillerUUID().equals(Minecraft.getInstance().player.getUUID());
-            boolean isLocalDead = deathMessage.getDeadUUID().equals(Minecraft.getInstance().player.getUUID());
+            LocalPlayer localPlayer = Minecraft.getInstance().player;
+            if (localPlayer == null) {
+                return;
+            }
+            boolean isLocalKill = deathMessage.getKillerUUID().equals(localPlayer.getUUID());
+            boolean isLocalDead = deathMessage.getDeadUUID().equals(localPlayer.getUUID());
             if(isLocalKill && !isLocalDead) {
                 CSGameHud.getInstance().addKill(deathMessage);
             }

@@ -49,8 +49,9 @@ import net.minecraftforge.network.simple.SimpleChannel;
 @Mod(BlockOffensive.MODID)
 public class BlockOffensive {
     public static final String MODID = "blockoffensive";
-    private static final String PROTOCOL_VERSION = "1.3.0";
-    private static final NetworkPacketRegister PACKET_REGISTER = new NetworkPacketRegister(ResourceLocation.tryBuild(MODID, "main"),PROTOCOL_VERSION);
+    private static final NetworkPacketRegister PACKET_REGISTER = new NetworkPacketRegister(
+            ResourceLocation.tryBuild(MODID, "main"), BOPacketRegistration.PROTOCOL_VERSION
+    );
     public static final SimpleChannel INSTANCE = PACKET_REGISTER.getChannel();
 
     @SuppressWarnings("removal")
@@ -83,27 +84,7 @@ public class BlockOffensive {
     private void commonSetup(final FMLCommonSetupEvent event) {
 
         BlockOffensiveMinimapExtension.register();
-        PACKET_REGISTER.registerPacket(BombActionC2SPacket.class);
-        PACKET_REGISTER.registerPacket(BombActionS2CPacket.class);
-        PACKET_REGISTER.registerPacket(BombDemolitionProgressS2CPacket.class);
-        PACKET_REGISTER.registerPacket(MvpHUDCloseS2CPacket.class);
-        PACKET_REGISTER.registerPacket(MvpMessageS2CPacket.class);
-        PACKET_REGISTER.registerPacket(ShopStatesS2CPacket.class);
-        PACKET_REGISTER.registerPacket(CSGameSettingsS2CPacket.class);
-        PACKET_REGISTER.registerPacket(CSTabRemovalS2CPacket.class);
-        PACKET_REGISTER.registerPacket(DeathMessageS2CPacket.class);
-        PACKET_REGISTER.registerPacket(PxDeathCompatS2CPacket.class);
-        PACKET_REGISTER.registerPacket(PxRagdollRemovalCompatS2CPacket.class);
-        PACKET_REGISTER.registerPacket(CSGameWeaponDataS2CPacket.class);
-        PACKET_REGISTER.registerPacket(BombFuseS2CPacket.class);
-        PACKET_REGISTER.registerPacket(PlayerMoveC2SPacket.class);
-        PACKET_REGISTER.registerPacket(KillCamS2CPacket.class);
-        PACKET_REGISTER.registerPacket(RequestAttachTeammateC2SPacket.class);
-        PACKET_REGISTER.registerPacket(RequestKillCamFallbackC2SPacket.class);
-        PACKET_REGISTER.registerPacket(SwitchSpectateC2SPacket.class);
-        PACKET_REGISTER.registerPacket(SpectatorRosterS2CPacket.class);
-        PACKET_REGISTER.registerPacket(VoteSyncS2CPacket.class);
-        PACKET_REGISTER.registerPacket(VoteCastC2SPacket.class);
+        BOPacketRegistration.register(PACKET_REGISTER);
 
         event.enqueueWork(() -> {
             ColoredPlayerCapability.register();
@@ -146,7 +127,7 @@ public class BlockOffensive {
     private static void registerCompat() {
         // 物理模组兼容
         if (BOImpl.isPhysicsModLoaded()) {
-            DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> PhysicsModCompat::init);
+            DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> PhysicsModCompat.init());
         }
         // CS Grenade 兼容
         if (FPSMImpl.findCounterStrikeGrenadesMod()) {

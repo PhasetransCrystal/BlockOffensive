@@ -2,8 +2,9 @@ package com.ptcrys.blockoffensive.client.screen.hud;
 
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.ptcrys.blockoffensive.client.data.CSClientData;
-import com.ptcrys.blockoffensive.util.BOUtil;
+import com.ptcrys.fpsmatch.common.client.FPSMClient;
 import com.ptcrys.fpsmatch.core.data.PlayerData;
+import com.ptcrys.blockoffensive.minimap.CSHudSafeAreaLayouts;
 import com.ptcrys.fpsmatch.util.RenderUtil;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
@@ -12,6 +13,7 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.PlayerFaceRenderer;
 import net.minecraft.client.multiplayer.PlayerInfo;
 import net.minecraft.network.chat.Component;
+import net.minecraft.world.entity.player.Player;
 
 import java.util.*;
 import java.util.Comparator;
@@ -25,29 +27,29 @@ public class CSDMOverlay {
     private final Minecraft minecraft = Minecraft.getInstance();
 
     public void render(GuiGraphics guiGraphics, int screenWidth, int screenHeight) {
+        int players = RenderUtil.getTeamsPlayerInfo().values().stream().mapToInt(List::size).sum();
+        render(guiGraphics, CSHudSafeAreaLayouts.csdmScoreboard(screenWidth, screenHeight, players));
+    }
+
+    public void render(GuiGraphics guiGraphics, CSHudSafeAreaLayouts.CsdmScoreboardLayout layout) {
         Font font = minecraft.font;
         if (minecraft.player == null) return;
 
-        // 计算缩放因子 (以855x480为基准)
-        float scaleFactor = Math.min(screenWidth / 855.0f, screenHeight / 480.0f);
+        renderTimeCounter(guiGraphics, font, layout);
 
-        int centerX = screenWidth / 2;
-        int startY = (int) (2 * scaleFactor);
-        int timeBarHeight = (int) (13 * scaleFactor);
-        int avatarSize = (int) (24.0F * scaleFactor);
-        int avatarGap = (int) (16 * scaleFactor);
-        int scoreBgHeight = (int) (8 * scaleFactor);
-
-        // 渲染时间计数器
-        renderTimeCounter(guiGraphics, font, centerX, startY, timeBarHeight, scaleFactor);
-
-        // 渲染玩家头像和分数
-        renderPlayerAvatars(guiGraphics, font, centerX, startY + timeBarHeight + 2, avatarSize, avatarGap, scoreBgHeight, scaleFactor);
+        renderPlayerAvatars(guiGraphics, font, layout);
     }
 
-    private void renderTimeCounter(GuiGraphics guiGraphics, Font font, int centerX, int startY, int timeBarHeight, float scaleFactor) {
-        // 渲染中间时间区域背景
-        int timeAreaWidth = (int) (20 * scaleFactor);
+    private void renderTimeCounter(
+            GuiGraphics guiGraphics,
+            Font font,
+            CSHudSafeAreaLayouts.CsdmScoreboardLayout layout
+    ) {
+        int centerX = layout.centerX();
+        int startY = layout.startY();
+        int timeBarHeight = layout.timeBarHeight();
+        float scaleFactor = layout.scale();
+        int timeAreaWidth = layout.timeAreaWidth();
         guiGraphics.fillGradient(centerX - timeAreaWidth, startY, centerX + timeAreaWidth, startY + timeBarHeight, -1072689136, -804253680);
 
         // 渲染时间
@@ -64,7 +66,14 @@ public class CSDMOverlay {
         guiGraphics.pose().popPose();
     }
 
-    private void renderPlayerAvatars(GuiGraphics guiGraphics, Font font, int centerX, int startY, int avatarSize, int avatarGap, int scoreBgHeight, float scaleFactor) {
+    private void renderPlayerAvatars(
+            GuiGraphics guiGraphics,
+            Font font,
+            CSHudSafeAreaLayouts.CsdmScoreboardLayout layout
+    ) {
+        float scaleFactor = layout.scale();
+        int avatarSize = layout.avatars().avatarSize();
+        int scoreBgHeight = layout.scoreBgHeight();
         // 获取所有玩家信息
         Map<String, List<PlayerInfo>> teamPlayers = RenderUtil.getTeamsPlayerInfo();
         List<PlayerInfo> allPlayers = new ArrayList<>();
@@ -76,12 +85,8 @@ public class CSDMOverlay {
         allPlayers.sort(Comparator.comparingInt(this::getPlayerScore).reversed());
 
         // 最多显示15个玩家
-        int maxPlayers = Math.min(15, allPlayers.size());
+        int maxPlayers = Math.min(layout.avatars().count(), allPlayers.size());
         List<PlayerInfo> topPlayers = allPlayers.subList(0, maxPlayers);
-
-        // 计算总宽度
-        int totalWidth = topPlayers.size() * avatarSize + (topPlayers.size() - 1) * avatarGap;
-        int startX = centerX - totalWidth / 2;
 
         // 渲染玩家头像和分数
         for (int i = 0; i < topPlayers.size(); i++) {
@@ -89,7 +94,8 @@ public class CSDMOverlay {
             Optional<PlayerData> playerData = RenderUtil.getPlayerData(player);
             if(playerData.isEmpty()) continue;
             PlayerData data = playerData.get();
-            int drawX = startX + i * (avatarSize + avatarGap);
+            int drawX = layout.avatars().xAt(i);
+            int startY = layout.avatars().y();
 
             // 渲染玩家头像
             renderPlayerAvatar(guiGraphics, player, data, drawX, startY, avatarSize);
@@ -148,12 +154,18 @@ public class CSDMOverlay {
     }
 
     public static String formatTime(int totalSeconds) {
-        if (totalSeconds / 60 == 0 && totalSeconds % 60 <= 10) {
+        int remainingMinutes = totalSeconds / 60;
+        int remainingSecondsPart = totalSeconds % 60;
+
+        if (remainingMinutes == 0 && remainingSecondsPart <= 10) {
             textRoundTimeColor = color(240, 40, 40);
         } else {
             textRoundTimeColor = color(255, 255, 255);
         }
 
-        return BOUtil.formatMinutesSeconds(totalSeconds);
+        String minutesPart = String.format("%02d", remainingMinutes);
+        String secondsPart = String.format("%02d", remainingSecondsPart);
+
+        return minutesPart + ":" + secondsPart;
     }
 }

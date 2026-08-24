@@ -1,6 +1,7 @@
 package com.ptcrys.blockoffensive.minimap;
 
 import com.ptcrys.fpsmatch.core.minimap.marker.DefaultTeamVisibilityPolicy;
+import com.ptcrys.fpsmatch.core.minimap.marker.DeathMarkerEvent;
 import com.ptcrys.fpsmatch.core.minimap.marker.MarkerCandidate;
 import com.ptcrys.fpsmatch.core.minimap.marker.MarkerSnapshot;
 import com.ptcrys.fpsmatch.core.minimap.marker.MinimapViewerContext;
@@ -11,9 +12,12 @@ import com.ptcrys.fpsmatch.core.minimap.model.NamespacedId;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 /**
@@ -39,26 +43,25 @@ public final class CSMinimapVisibilityPolicy implements MinimapVisibilityPolicy 
         Objects.requireNonNull(context, "context");
         Objects.requireNonNull(candidates, "candidates");
         // FFA: no shared intel and no teammates — only self + public + own death events.
+        List<MarkerSnapshot.Marker> visible;
         if (!context.teamSharedIntelEnabled() && context.role() != ViewerRole.SPECTATOR_TEAM) {
-            return filterFfa(context, candidates);
-        }
-        List<MarkerSnapshot.Marker> visible = new ArrayList<>(base.filter(context, candidates));
-        Set<String> already = visible.stream().map(m -> m.markerId().toString()).collect(Collectors.toCollection(java.util.LinkedHashSet::new));
-        if (context.role() == ViewerRole.ACTIVE_PLAYER || context.role() == ViewerRole.DEAD_TEAM_MEMBER) {
-            if (context.teamSharedIntelEnabled()) {
-                for (EnemyIntelState intel : intelLedger.intelForTeam(context.teamId())) {
-                    MarkerSnapshot.Marker marker = toIntelMarker(intel);
-                    if (already.add(marker.markerId().toString())) {
-                        visible.add(marker);
+            visible = filterFfa(context, candidates);
+        } else {
+            visible = new ArrayList<>(base.filter(context, candidates));
+            Set<String> already = visible.stream().map(m -> m.markerId().toString())
+                    .collect(Collectors.toCollection(java.util.LinkedHashSet::new));
+            if (context.role() == ViewerRole.ACTIVE_PLAYER || context.role() == ViewerRole.DEAD_TEAM_MEMBER) {
+                if (context.teamSharedIntelEnabled()) {
+                    for (EnemyIntelState intel : intelLedger.intelForTeam(context.teamId())) {
+                        MarkerSnapshot.Marker marker = toIntelMarker(intel);
+                        if (already.add(marker.markerId().toString())) {
+                            visible.add(marker);
+                        }
                     }
                 }
             }
         }
-        if (context.role() == ViewerRole.SPECTATOR_TEAM && context.observerOmniscient()) {
-            // omniscient already gets public/self via base; providers supply full living set for observers in later wiring
-            return MarkerSnapshot.of(visible).markers();
-        }
-        return MarkerSnapshot.of(visible).markers();
+        return normalizeStyles(context, candidates, visible);
     }
 
     private static List<MarkerSnapshot.Marker> filterFfa(MinimapViewerContext context, List<MarkerCandidate> candidates) {
@@ -104,7 +107,7 @@ public final class CSMinimapVisibilityPolicy implements MinimapVisibilityPolicy 
         return new MarkerSnapshot.Marker(
                 id,
                 PlayerPoseSnapshot.TYPE_ID,
-                PlayerPoseSnapshot.STYLE_ID,
+                CSMinimapAssetCatalog.STYLE_ENEMY,
                 intel.x(),
                 intel.y(),
                 intel.z(),
@@ -112,6 +115,46 @@ public final class CSMinimapVisibilityPolicy implements MinimapVisibilityPolicy 
                 intel.updatedTick(),
                 expires,
                 intel.floorSlug()
+        );
+    }
+
+    private static List<MarkerSnapshot.Marker> normalizeStyles(
+            MinimapViewerContext context,
+            List<MarkerCandidate> candidates,
+            List<MarkerSnapshot.Marker> visible
+    ) {
+        Map<NamespacedId, MarkerCandidate> byId = new LinkedHashMap<>();
+        candidates.forEach(candidate -> byId.put(candidate.markerId(), candidate));
+        List<MarkerSnapshot.Marker> normalized = new ArrayList<>(visible.size());
+        for (MarkerSnapshot.Marker marker : visible) {
+            MarkerCandidate source = byId.get(marker.markerId());
+            NamespacedId style = marker.styleId();
+            if ((source != null && source.deathEvent())
+                    || marker.typeId().equals(DeathMarkerEvent.TYPE_ID)) {
+                style = CSMinimapAssetCatalog.STYLE_DEATH;
+            } else if (marker.typeId().equals(PlayerPoseSnapshot.TYPE_ID)) {
+                boolean self = context.selfMarkerId().filter(marker.markerId()::equals).isPresent();
+                if (self) {
+                    style = CSMinimapAssetCatalog.STYLE_SELF;
+                } else if (source != null && context.teamId().equals(source.teamId())) {
+                    style = CSMinimapAssetCatalog.STYLE_ALLY;
+                } else {
+                    style = CSMinimapAssetCatalog.STYLE_ENEMY;
+                }
+            }
+            normalized.add(withStyle(marker, style));
+        }
+        return MarkerSnapshot.of(normalized).markers();
+    }
+
+    private static MarkerSnapshot.Marker withStyle(
+            MarkerSnapshot.Marker marker,
+            NamespacedId style
+    ) {
+        return new MarkerSnapshot.Marker(
+                marker.markerId(), marker.typeId(), style,
+                marker.x(), marker.y(), marker.z(), marker.yaw(), marker.updatedTick(),
+                marker.expiresTick(), marker.floorSlug(), marker.stateFields()
         );
     }
 }

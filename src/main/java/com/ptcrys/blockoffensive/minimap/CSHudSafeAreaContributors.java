@@ -8,14 +8,11 @@ import java.util.function.BooleanSupplier;
 import java.util.function.IntSupplier;
 import java.util.function.Supplier;
 
-/**
- * Per-frame BO HUD safe-area contributions. Priority 100, stable IDs.
- * Visibility predicates mirror real HUD render gates; rectangles use {@link CSHudSafeAreaLayouts}.
- */
+/** Contributes the exact geometry snapshot rendered by BO in the current frame. */
 public final class CSHudSafeAreaContributors {
-    public record ScoreboardSource(BooleanSupplier visible, IntSupplier screenWidth, IntSupplier screenHeight) {}
-    public record SimpleTopSource(BooleanSupplier visible, IntSupplier screenWidth) {}
-    public record RosterSource(BooleanSupplier visible, IntSupplier screenWidth, IntSupplier rowCount) {}
+    public record RosterSource(BooleanSupplier visible, IntSupplier screenWidth, IntSupplier rowCount) {
+    }
+
     public record KillFeedSource(
             BooleanSupplier visible,
             IntSupplier screenWidth,
@@ -23,128 +20,122 @@ public final class CSHudSafeAreaContributors {
             IntSupplier position,
             IntSupplier rows,
             IntSupplier maxRowWidth
-    ) {}
+    ) {
+    }
+
     public record SpectatorCardSource(
             BooleanSupplier visible,
             IntSupplier screenWidth,
             IntSupplier screenHeight,
             Supplier<Float> slideYPixels
-    ) {}
+    ) {
+    }
 
-    private final ScoreboardSource scoreboard;
-    private final SimpleTopSource vote;
-    private final SimpleTopSource bombFuse;
+    private final Supplier<CSHudSafeAreaLayouts.HudGeometry> geometry;
     private final RosterSource roster;
     private final KillFeedSource killFeed;
     private final SpectatorCardSource spectatorCard;
 
+    public CSHudSafeAreaContributors(Supplier<CSHudSafeAreaLayouts.HudGeometry> geometry) {
+        this(geometry, null, null, null);
+    }
+
     public CSHudSafeAreaContributors(
-            ScoreboardSource scoreboard,
-            SimpleTopSource vote,
-            SimpleTopSource bombFuse,
+            Supplier<CSHudSafeAreaLayouts.HudGeometry> geometry,
             RosterSource roster,
             KillFeedSource killFeed,
             SpectatorCardSource spectatorCard
     ) {
-        this.scoreboard = Objects.requireNonNull(scoreboard, "scoreboard");
-        this.vote = Objects.requireNonNull(vote, "vote");
-        this.bombFuse = Objects.requireNonNull(bombFuse, "bombFuse");
-        this.roster = Objects.requireNonNull(roster, "roster");
-        this.killFeed = Objects.requireNonNull(killFeed, "killFeed");
-        this.spectatorCard = Objects.requireNonNull(spectatorCard, "spectatorCard");
+        this.geometry = Objects.requireNonNull(geometry, "geometry");
+        this.roster = roster;
+        this.killFeed = killFeed;
+        this.spectatorCard = spectatorCard;
     }
 
     public void contributeAll(HudSafeAreaRegistry registry) {
         Objects.requireNonNull(registry, "registry");
-        contributeScoreboard(registry);
-        contributeVote(registry);
-        contributeBombFuse(registry);
-        contributeRoster(registry);
+        CSHudSafeAreaLayouts.HudGeometry frame = Objects.requireNonNull(
+                geometry.get(), "current HUD geometry"
+        );
+        contributeAll(registry, frame, frame.spectator());
+    }
+
+    /**
+     * The render manager's context is authoritative for transient spectator surfaces.
+     * A stale roster/card projection must not reserve space after a spectator becomes a player.
+     */
+    public void contributeAll(HudSafeAreaRegistry registry, boolean spectator) {
+        Objects.requireNonNull(registry, "registry");
+        contributeAll(
+                registry,
+                Objects.requireNonNull(geometry.get(), "current HUD geometry"),
+                spectator
+        );
+    }
+
+    private void contributeAll(
+            HudSafeAreaRegistry registry,
+            CSHudSafeAreaLayouts.HudGeometry frame,
+            boolean spectator
+    ) {
+        frame.safeAreas().forEach((id, rect) -> registry.contributeFixed(
+                id,
+                CSHudSafeAreaLayouts.PRIORITY,
+                rect
+        ));
+        contributeRoster(registry, spectator);
         contributeKillFeed(registry);
-        contributeSpectatorCard(registry);
+        contributeSpectatorCard(registry, spectator);
     }
 
-    public void contributeScoreboard(HudSafeAreaRegistry registry) {
-        if (!scoreboard.visible.getAsBoolean()) {
+    private void contributeRoster(HudSafeAreaRegistry registry, boolean spectator) {
+        if (!spectator || roster == null || !roster.visible().getAsBoolean()) {
             return;
         }
-        ScreenRect rect = CSHudSafeAreaLayouts.scoreboard(
-                scoreboard.screenWidth.getAsInt(),
-                scoreboard.screenHeight.getAsInt()
-        );
-        registry.contributeFixed(CSHudSafeAreaLayouts.ID_SCOREBOARD, CSHudSafeAreaLayouts.PRIORITY, rect);
-    }
-
-    public void contributeVote(HudSafeAreaRegistry registry) {
-        if (!vote.visible.getAsBoolean()) {
-            return;
-        }
-        registry.contributeFixed(
-                CSHudSafeAreaLayouts.ID_VOTE,
-                CSHudSafeAreaLayouts.PRIORITY,
-                CSHudSafeAreaLayouts.vote(vote.screenWidth.getAsInt())
-        );
-    }
-
-    public void contributeBombFuse(HudSafeAreaRegistry registry) {
-        if (!bombFuse.visible.getAsBoolean()) {
-            return;
-        }
-        registry.contributeFixed(
-                CSHudSafeAreaLayouts.ID_BOMB_FUSE,
-                CSHudSafeAreaLayouts.PRIORITY,
-                CSHudSafeAreaLayouts.bombFuse(bombFuse.screenWidth.getAsInt())
-        );
-    }
-
-    public void contributeRoster(HudSafeAreaRegistry registry) {
-        if (!roster.visible.getAsBoolean()) {
-            return;
-        }
-        int rows = roster.rowCount.getAsInt();
+        int rows = roster.rowCount().getAsInt();
         if (rows <= 0) {
             return;
         }
         registry.contributeFixed(
                 CSHudSafeAreaLayouts.ID_SPECTATOR_ROSTER,
                 CSHudSafeAreaLayouts.PRIORITY,
-                CSHudSafeAreaLayouts.spectatorRoster(roster.screenWidth.getAsInt(), rows)
+                CSHudSafeAreaLayouts.spectatorRoster(roster.screenWidth().getAsInt(), rows)
         );
     }
 
-    public void contributeKillFeed(HudSafeAreaRegistry registry) {
-        if (!killFeed.visible.getAsBoolean()) {
+    private void contributeKillFeed(HudSafeAreaRegistry registry) {
+        if (killFeed == null || !killFeed.visible().getAsBoolean()) {
             return;
         }
-        int rows = killFeed.rows.getAsInt();
-        int maxW = killFeed.maxRowWidth.getAsInt();
-        if (rows <= 0 || maxW <= 0) {
+        int rows = killFeed.rows().getAsInt();
+        int maxWidth = killFeed.maxRowWidth().getAsInt();
+        if (rows <= 0 || maxWidth <= 0) {
             return;
         }
         registry.contributeFixed(
                 CSHudSafeAreaLayouts.ID_KILL_FEED,
                 CSHudSafeAreaLayouts.PRIORITY,
                 CSHudSafeAreaLayouts.killFeed(
-                        killFeed.screenWidth.getAsInt(),
-                        killFeed.screenHeight.getAsInt(),
-                        killFeed.position.getAsInt(),
+                        killFeed.screenWidth().getAsInt(),
+                        killFeed.screenHeight().getAsInt(),
+                        killFeed.position().getAsInt(),
                         rows,
-                        maxW
+                        maxWidth
                 )
         );
     }
 
-    public void contributeSpectatorCard(HudSafeAreaRegistry registry) {
-        if (!spectatorCard.visible.getAsBoolean()) {
+    private void contributeSpectatorCard(HudSafeAreaRegistry registry, boolean spectator) {
+        if (!spectator || spectatorCard == null || !spectatorCard.visible().getAsBoolean()) {
             return;
         }
         registry.contributeFixed(
                 CSHudSafeAreaLayouts.ID_SPECTATOR_CARD,
                 CSHudSafeAreaLayouts.PRIORITY,
                 CSHudSafeAreaLayouts.spectatorCard(
-                        spectatorCard.screenWidth.getAsInt(),
-                        spectatorCard.screenHeight.getAsInt(),
-                        spectatorCard.slideYPixels.get()
+                        spectatorCard.screenWidth().getAsInt(),
+                        spectatorCard.screenHeight().getAsInt(),
+                        spectatorCard.slideYPixels().get()
                 )
         );
     }

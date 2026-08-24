@@ -1,6 +1,6 @@
 package com.ptcrys.blockoffensive.client;
 
-import com.ptcrys.blockoffensive.client.key.*;
+import com.ptcrys.blockoffensive.client.key.SwitchSpectatorKey;
 import com.ptcrys.blockoffensive.client.renderer.C4Renderer;
 import com.ptcrys.blockoffensive.client.screen.hud.*;
 import com.ptcrys.blockoffensive.minimap.CSHudSafeAreaContributors;
@@ -12,6 +12,8 @@ import com.ptcrys.fpsmatch.common.client.FPSMGameHudManager;
 import com.ptcrys.fpsmatch.common.client.spec.SpecKeyHandler;
 import com.ptcrys.fpsmatch.common.client.tab.TabManager;
 import com.ptcrys.blockoffensive.BlockOffensive;
+import com.ptcrys.blockoffensive.client.key.DismantleBombKey;
+import com.ptcrys.blockoffensive.client.key.OpenShopKey;
 import net.minecraft.Optionull;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.PlayerInfo;
@@ -39,9 +41,9 @@ public class BOClientBootstrap {
         event.register(DismantleBombKey.DISMANTLE_BOMB_KEY);
         event.register(SwitchSpectatorKey.KEY_SPECTATE_NEXT);
         event.register(SwitchSpectatorKey.KEY_SPECTATE_PREV);
-        event.register(TeamChatKey.TEAM_CHAT_KEY);
-        event.register(VoteKey.VOTE_AGREE_KEY);
-        event.register(VoteKey.VOTE_DISAGREE_KEY);
+        event.register(com.ptcrys.blockoffensive.client.key.TeamChatKey.TEAM_CHAT_KEY);
+        event.register(com.ptcrys.blockoffensive.client.key.VoteKey.VOTE_AGREE_KEY);
+        event.register(com.ptcrys.blockoffensive.client.key.VoteKey.VOTE_DISAGREE_KEY);
         SpecKeyHandler.registerSwitchKey(SwitchSpectatorKey.KEY_SPECTATE_NEXT);
         SpecKeyHandler.registerSwitchKey(SwitchSpectatorKey.KEY_SPECTATE_PREV);
         // cs: hud | overlay | tab
@@ -56,19 +58,7 @@ public class BOClientBootstrap {
     private static void registerSafeAreaContributors() {
         Minecraft mc = Minecraft.getInstance();
         CSHudSafeAreaContributors contributors = new CSHudSafeAreaContributors(
-                new CSHudSafeAreaContributors.ScoreboardSource(
-                        () -> FPSMGameHudManager.shouldRender() && CSGameHud.getInstance().isScoreboardOccupying(),
-                        () -> mc.getWindow().getGuiScaledWidth(),
-                        () -> mc.getWindow().getGuiScaledHeight()
-                ),
-                new CSHudSafeAreaContributors.SimpleTopSource(
-                        () -> CSVoteHud.getInstance().isRendering(),
-                        () -> mc.getWindow().getGuiScaledWidth()
-                ),
-                new CSHudSafeAreaContributors.SimpleTopSource(
-                        () -> CSBombFuseHud.getInstance().isRendering(),
-                        () -> mc.getWindow().getGuiScaledWidth()
-                ),
+                CSGameHud.getInstance()::currentFrameGeometry,
                 new CSHudSafeAreaContributors.RosterSource(
                         () -> CSSpectatorRoster.getInstance().isRendering(),
                         () -> mc.getWindow().getGuiScaledWidth(),
@@ -93,7 +83,21 @@ public class BOClientBootstrap {
         FPSMGameHudManager.INSTANCE.registerSafeAreaContributor(
                 "blockoffensive:hud_safe_areas",
                 CSHudSafeAreaLayouts.PRIORITY,
-                (HudSafeAreaRegistry registry, HudRenderContext ctx) -> contributors.contributeAll(registry)
+                (HudSafeAreaRegistry registry, HudRenderContext ctx) -> {
+                    if (!ctx.globalEnabled() || (!"cs".equals(ctx.gameType()) && !"csdm".equals(ctx.gameType()))) {
+                        return;
+                    }
+                    CSHudSafeAreaLayouts.HudGeometry frame = CSGameHud.getInstance().currentFrameGeometry();
+                    if (frame == null
+                            || frame.screenWidth() != mc.getWindow().getGuiScaledWidth()
+                            || frame.screenHeight() != mc.getWindow().getGuiScaledHeight()
+                            || frame.spectator() != ctx.spectator()
+                            || (frame.gameType() == CSHudSafeAreaLayouts.GameType.CS && !"cs".equals(ctx.gameType()))
+                            || (frame.gameType() == CSHudSafeAreaLayouts.GameType.CSDM && !"csdm".equals(ctx.gameType()))) {
+                        return;
+                    }
+                    contributors.contributeAll(registry, ctx.spectator());
+                }
         );
     }
 
