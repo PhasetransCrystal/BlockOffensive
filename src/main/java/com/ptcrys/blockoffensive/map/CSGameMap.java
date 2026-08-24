@@ -603,7 +603,8 @@ public class CSGameMap extends CSMap{
 
     @Override
     protected boolean shouldAdvanceRoundLifecycle() {
-        return !checkPauseTime() && !checkWarmUpTime() && !isKnifeSelectingVote();
+        // 加时投票期间冻结回合推进，避免投票未出结果就开下一回合
+        return !checkPauseTime() && !checkWarmUpTime() && !isKnifeSelectingVote() && !isWaitingOverTimeVote;
     }
 
     @Override
@@ -801,9 +802,16 @@ public class CSGameMap extends CSMap{
                     this.setUnPauseState();
                     this.start();
                 },
-                winnerTeam.getPlayerList()
+                winnerTeam.getPlayerList(),
+                VoteObj.TimeoutPolicy.FAIL, VoteObj.AbstentionPolicy.COUNT_AS_NO,
+                this::voteGameTime, 20L
         );
         this.startVote(knife);
+    }
+
+    /** 投票计时统一使用服务端游戏时间(tick)，跟随游戏节奏而非墙钟。 */
+    private long voteGameTime() {
+        return this.getServerLevel().getGameTime();
     }
 
     public boolean isKnifeSelectingVote(){
@@ -930,8 +938,10 @@ public class CSGameMap extends CSMap{
      * 处理胜利方经济奖励
      */
     private void processWinnerEconomicReward(@NotNull ServerTeam winTeam,WinnerReason reason) {
+        // CS2：拆弹获胜方（CT）额外获得拆弹奖励
+        boolean defuseBonusEligible = reason == WinnerReason.DEFUSE_BOMB && winTeam.getFixedName().equalsIgnoreCase(getCT().getFixedName());
         winTeam.getPlayerList().forEach(uuid -> {
-            int money = reason.getWinMoney(this);
+            int money = reason.getWinMoney(this) + (defuseBonusEligible ? defuseBonus.get() : 0);
             ShopCapability.getShop(winTeam).ifPresent(shop -> shop.addMoney(uuid,money));
 
             getPlayerByUUID(uuid).ifPresent(player ->
@@ -945,14 +955,13 @@ public class CSGameMap extends CSMap{
      */
     private void processLoserEconomicReward(@NotNull ServerTeam loserTeam, @NotNull WinnerReason reason) {
         int compensationFactor = getCompensation(loserTeam).getFactor();
-        boolean isDefuseBonusApplicable = checkCanPlacingBombs(loserTeam.getFixedName())
-                && reason == WinnerReason.DEFUSE_BOMB;
 
-        // 基础经济 + 拆弹额外奖励
-        int baseEconomy = defaultLoserEconomy.get() + (isDefuseBonusApplicable ? defuseBonus.get() : 0);
-        // 总失败补偿 = 基础经济 + 连败补偿
-        int totalLossCompensation = baseEconomy + (compensationBase.get() * compensationFactor);
-        String rewardDesc = baseEconomy + " + " + compensationBase.get() + " * " + compensationFactor;
+        // 基础经济（拆弹奖励已按 CS2 移给胜方 CT，败方不再额外发放）
+        int baseEconomy = defaultLoserEconomy.get();
+        // 总失败补偿 = 基础经济 + 连败补偿（连败数 = 补偿因子 - 1，与商店显示口径一致）
+        int lossStreak = Math.max(0, compensationFactor - 1);
+        int totalLossCompensation = baseEconomy + (compensationBase.get() * lossStreak);
+        String rewardDesc = baseEconomy + " + " + compensationBase.get() + " * " + lossStreak;
 
         loserTeam.getPlayerList().forEach(uuid -> {
             // 仅在符合条件时发放补偿
@@ -1094,7 +1103,8 @@ public class CSGameMap extends CSMap{
 
 
     private void checkLoseStreaks(ServerTeam winTeam, @NotNull List<ServerTeam> loseTeams) {
-        winTeam.getCapabilityMap().get(CompensationCapability.class).ifPresentOrElse(cap-> cap.reduce(2),()->FPSMatch.LOGGER.error("Failed to reduce Compensation capability"));
+        // 胜方连败计数清零：CS 规则中获胜后连败补偿重置
+        winTeam.getCapabilityMap().get(CompensationCapability.class).ifPresentOrElse(cap-> cap.setFactor(0),()->FPSMatch.LOGGER.error("Failed to reset Compensation capability"));
 
         loseTeams.forEach(team -> team.getCapabilityMap().get(CompensationCapability.class).ifPresentOrElse(cap-> cap.add(1),()->FPSMatch.LOGGER.error("Failed to add Compensation capability")));
     }
@@ -1140,18 +1150,11 @@ public class CSGameMap extends CSMap{
     public void checkMatchPoint(){
         int ctScore = this.getCT().getScores();
         int tScore = this.getT().getScores();
-        if(this.isOvertime){
-            int check = winnerRound.get() - 1 - 6 * this.overCount + 4;
-
-            if(ctScore - check == 1 || tScore - check == 1){
-                this.sendAllPlayerTitle(Component.translatable("blockoffensive.map.cs.match.point").withStyle(ChatFormatting.RED),null);
-                this.sendPacketToAllPlayer(new FPSMSoundPlayS2CPacket(BOSoundRegister.MATCH_POINT.get().getLocation()));
-            }
-        }else{
-            if(ctScore == winnerRound.get() - 1 || tScore == winnerRound.get() - 1){
-                this.sendAllPlayerTitle(Component.translatable("blockoffensive.map.cs.match.point").withStyle(ChatFormatting.RED),null);
-                this.sendPacketToAllPlayer(new FPSMSoundPlayS2CPacket(BOSoundRegister.MATCH_POINT.get().getLocation()));
-            }
+        // 赛点 = 获胜所需分数 - 1（常规与加时统一口径）
+        int matchPointScore = calculateRequiredScore() - 1;
+        if(ctScore == matchPointScore || tScore == matchPointScore){
+            this.sendAllPlayerTitle(Component.translatable("blockoffensive.map.cs.match.point").withStyle(ChatFormatting.RED),null);
+            this.sendPacketToAllPlayer(new FPSMSoundPlayS2CPacket(BOSoundRegister.MATCH_POINT.get().getLocation()));
         }
     }
 
@@ -1249,7 +1252,8 @@ public class CSGameMap extends CSMap{
                 },
                 this.getMapTeams().getJoinedUUID(),
                 BOConfig.common.voteTimeoutPolicy.get(),
-                BOConfig.common.voteAbstentionPolicy.get()
+                BOConfig.common.voteAbstentionPolicy.get(),
+                this::voteGameTime, 20L
         );
 
         this.startVote(overtime);
@@ -1444,8 +1448,8 @@ public class CSGameMap extends CSMap{
      */
     private boolean shouldIncreaseOvertimeCount(int totalRoundsInOvertime, int overtimeRound,
                                                 int ctScore, int tScore, int maxNormalScore) {
-        // 只有在完成一个加时赛段时才考虑增加计数
-        int currentOverTimeRound = totalRoundsInOvertime - overCount * overtimeRound;
+        // 只有在完成一个加时赛段时才考虑增加计数（每段 = overtimeRound*2 局，需减去已完成段）
+        int currentOverTimeRound = totalRoundsInOvertime - overCount * overtimeRound * 2;
 
         if(currentOverTimeRound != overtimeRound * 2){
             return false;
@@ -1597,7 +1601,8 @@ public class CSGameMap extends CSMap{
                     ()->{},
                     this.getMapTeams().getJoinedUUID(),
                     BOConfig.common.voteTimeoutPolicy.get(),
-                    BOConfig.common.voteAbstentionPolicy.get()
+                    BOConfig.common.voteAbstentionPolicy.get(),
+                    this::voteGameTime, 20L
             );
             this.startVote(unpause);
             this.getVote().processVote(serverPlayer,true);

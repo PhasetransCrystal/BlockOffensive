@@ -10,6 +10,7 @@ import com.ptcrys.fpsmatch.common.client.FPSMClient;
 import com.ptcrys.fpsmatch.common.client.data.FPSMClientGlobalData;
 import com.ptcrys.fpsmatch.common.client.spec.SpectateMode;
 import com.ptcrys.fpsmatch.common.client.spec.SpectateState;
+import com.ptcrys.fpsmatch.common.client.spec.SpectatorCameraController;
 import com.ptcrys.fpsmatch.core.team.ClientTeam;
 import com.ptcrys.fpsmatch.util.FPSMFormatUtil;
 import java.util.Locale;
@@ -30,6 +31,9 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.ClipContext;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.scores.Team;
 import net.minecraftforge.api.distmarker.Dist;
@@ -45,10 +49,14 @@ import net.minecraftforge.fml.common.Mod.EventBusSubscriber.Bus;
 
 @EventBusSubscriber(value = {Dist.CLIENT}, bus = Bus.FORGE)
 public final class KillCamManager {
-    private static final int PULL_T = 40;
-    private static final int FADE_T = 20;
-    private static final double EXTRA_DIST = 3.75D;
+    private static final int PULL_T = 50;
+    private static final int FADE_T = 24;
+    private static final double EXTRA_DIST = 5.0D;
     private static final float GRAY_SWITCH_FRAC = 0.15F;
+    /** PULL 进度超过该比例后开始叠加渐黑，与拉远尾段重叠（CS2 式死亡镜头）。 */
+    private static final float BLACK_FADE_START = 0.55F;
+    /** 相机与最近方块的间隔余量，防止贴墙时穿模。 */
+    private static final double WALL_INSET = 0.35D;
 
     private static final int HUD_IN_T = 10;
     private static final float POP_MIN_SCALE = 0.92F;
@@ -88,21 +96,8 @@ public final class KillCamManager {
     private static Phase phase = Phase.NONE;
     private static int tickIn = 0;
 
-    private static double vx;
-    private static double vy;
-    private static double vz;
-
-    private static double kx;
-    private static double ky;
-    private static double kz;
-
-    private static double dx;
-    private static double dy;
-    private static double dz;
-
-    private static double lastCamX = Double.NaN;
-    private static double lastCamY = Double.NaN;
-    private static double lastCamZ = Double.NaN;
+    /** 死亡镜头相机运动模型：集中管理拉远缓动、帧间插值朝向与方块碰撞收近。 */
+    private static final DeathCamRig rig = new DeathCamRig();
 
     private static boolean hudOn = false;
     private static int hudTick = 0;
@@ -124,6 +119,8 @@ public final class KillCamManager {
 
     private static int clientAttachTries = 0;
     private static int clientAttachCooldown = 0;
+    /** 死亡镜头整体渐黑进度(0~1)，单调递增至 1，避免阶段切换时的跳变。 */
+    private static float blackFade = 0.0F;
 
     private static Entity ghostCam;
 
@@ -178,19 +175,16 @@ public final class KillCamManager {
             return;
         }
 
-        kx = kPos.x;
-        ky = kPos.y;
-        kz = kPos.z;
+        Vec3 killerEye = kPos;
+        Vec3 victimEye = vPos;
 
-        vx = vPos.x;
-        vy = vPos.y;
-        vz = vPos.z;
-
-        double rx = vx - kx;
-        double ry = vy - ky;
-        double rz = vz - kz;
+        // 拉远方向：victim - killer（即朝杀手身后反方向拉远），零长度时退化到本地玩家视向
+        double rx = victimEye.x - killerEye.x;
+        double ry = victimEye.y - killerEye.y;
+        double rz = victimEye.z - killerEye.z;
         double len2 = rx * rx + ry * ry + rz * rz;
 
+        double dx, dy, dz;
         if (len2 < 1.0E-6) {
             LocalPlayer p = Minecraft.getInstance().player;
             if (p == null) {
@@ -246,6 +240,10 @@ public final class KillCamManager {
         grayEnabled = false;
         holdBlack = false;
 
+        blackFade = 0.0F;
+        double maxPull = computeWallClampedPullDistance(mc, victimEye, dx, dy, dz);
+        rig.begin(victimEye, killerEye, dx, dy, dz, maxPull);
+
         grayRequested = false;
         uiVeilStrength = 0.0F;
         endProbe();
@@ -254,13 +252,9 @@ public final class KillCamManager {
 
         ensureGhost();
         if (ghostCam != null) {
-            float yaw0 = (float) Math.toDegrees(Math.atan2(-(kx - vx), kz - vz));
-            float pitch0 = (float) Math.toDegrees(Math.atan2(-(ky - vy), Math.sqrt((kx - vx) * (kx - vx) + (kz - vz) * (kz - vz))));
-            ghostCam.moveTo(vx, vy, vz, yaw0, pitch0);
+            Vec3 start = rig.position();
+            ghostCam.moveTo(start.x, start.y, start.z, rig.yawAt(start.x, start.y, start.z), rig.pitchAt(start.x, start.y, start.z));
             ghostCam.setOldPosAndRot();
-            lastCamX = vx;
-            lastCamY = vy;
-            lastCamZ = vz;
             mc.setCameraEntity(ghostCam);
         }
     }
@@ -299,23 +293,20 @@ public final class KillCamManager {
 
                 double t = Mth.clamp((double) tickIn / (double) PULL_T, 0.0D, 1.0D);
                 double s = kickThenEaseOut(t);
-                double out = EXTRA_DIST * s;
+                rig.pull(s);
 
-                double nx = vx + dx * out;
-                double ny = vy + dy * out;
-                double nz = vz + dz * out;
+                // 渐黑与拉远尾段重叠：PULL 进度越过 BLACK_FADE_START 后单调推进
+                float pullP = s >= 1.0D ? 1.0F : (float) tickIn / (float) PULL_T;
+                blackFade = Math.max(blackFade, pullProgressiveFade(pullP));
 
+                Vec3 camPos = rig.position();
                 if (ghostCam != null) {
                     ghostCam.setOldPosAndRot();
-                    ghostCam.setPos(nx, ny, nz);
+                    ghostCam.setPos(camPos.x, camPos.y, camPos.z);
                     if (mc.getCameraEntity() != ghostCam) {
                         mc.setCameraEntity(ghostCam);
                     }
                 }
-
-                lastCamX = nx;
-                lastCamY = ny;
-                lastCamZ = nz;
 
                 if (!grayEnabled && t >= (double) GRAY_SWITCH_FRAC) {
                     enableGray();
@@ -341,6 +332,8 @@ public final class KillCamManager {
                 }
             }
             case FADE -> {
+                // 淡出收尾：平滑推进到全黑，避免阶段切换跳变
+                blackFade = Math.min(1.0F, blackFade + (1.0F / (float) FADE_T));
                 if (!holdBlack && ++tickIn >= FADE_T) {
                     holdBlack = true;
                     BlockOffensive.INSTANCE.sendToServer(new RequestAttachTeammateC2SPacket());
@@ -351,7 +344,11 @@ public final class KillCamManager {
             }
         }
 
-        if (isSpec) {
+        // Only restore the camera when a killcam phase is actually active. Without the
+        // phase guard this block also fires during normal teammate spectating (camera is a
+        // living teammate, not `pl`/`ghostCam`), force-restoring the camera to the local
+        // player every client tick and breaking "follow the spectated teammate".
+        if (isSpec && phase != Phase.NONE) {
             Entity camEnt = mc.getCameraEntity();
             if (camEnt != null && camEnt != pl && camEnt != ghostCam) {
                 resetForLifecycleBoundary();
@@ -374,26 +371,10 @@ public final class KillCamManager {
         if (phase != Phase.PULL) {
             return;
         }
-
-        double nx = lastCamX;
-        double ny = lastCamY;
-        double nz = lastCamZ;
-
-        if (Double.isNaN(nx)) {
-            nx = vx;
-            ny = vy;
-            nz = vz;
-        }
-
-        double vx_ = kx - nx;
-        double vy_ = ky - ny;
-        double vz_ = kz - nz;
-
-        float yaw = (float) Math.toDegrees(Math.atan2(-vx_, vz_));
-        float pitch = (float) Math.toDegrees(Math.atan2(-vy_, Math.sqrt(vx_ * vx_ + vz_ * vz_)));
-
-        e.setYaw(yaw);
-        e.setPitch(pitch);
+        // 使用相机本帧已插值好的位置计算朝向，替代每 tick 采样的离散值，消除旋转顿挫
+        Vec3 from = e.getCamera().getPosition();
+        e.setYaw(rig.yawAt(from.x, from.y, from.z));
+        e.setPitch(rig.pitchAt(from.x, from.y, from.z));
     }
 
     // BO 1.20.1-forge-official-1.3.0 (6) changed the gray-screen entry from
@@ -439,6 +420,7 @@ public final class KillCamManager {
             renderKillHud(mc, gg, sw, sh, blackAlpha);
         }
 
+        // 全屏黑幕放在整个 GUI(含聊天)之后绘制，避免聊天等 UI 穿透看到黑幕下的画面
         if (blackAlpha > 0.0F) {
             int a = Mth.clamp(Math.round(255.0F * blackAlpha), 0, 255);
             int argb = a << 24;
@@ -449,24 +431,7 @@ public final class KillCamManager {
     }
 
     private static float currentBlackAlpha() {
-        if (phase != Phase.FADE) {
-            return 0.0F;
-        }
-        float blackAlpha = holdBlack ? 1.0F : (float) tickIn / (float) FADE_T;
-        return Mth.clamp(blackAlpha, 0.0F, 1.0F);
-    }
-
-    public static void onSpectateModeUpdate(SpectateMode mode) {
-        Minecraft mc = Minecraft.getInstance();
-        LocalPlayer pl = mc.player;
-        if (pl == null) {
-            return;
-        }
-
-        if (!pl.isSpectator()) {
-            forceRestoreCameraToPlayer();
-            reset();
-        }
+        return Mth.clamp(blackFade, 0.0F, 1.0F);
     }
 
     @SubscribeEvent
@@ -835,6 +800,35 @@ public final class KillCamManager {
         return kick + (1.0D - kick) * easeOutCubic;
     }
 
+    /**
+     * PULL 进度对应的渐黑叠值：进度 &lt; {@link #BLACK_FADE_START} 时为 0，
+     * 之后线性拉满，与拉远尾段重叠，避免进入 FADE 时的明暗跳变。
+     */
+    private static float pullProgressiveFade(float pullProgress) {
+        if (pullProgress <= BLACK_FADE_START) {
+            return 0.0F;
+        }
+        return Mth.clamp((pullProgress - BLACK_FADE_START) / (1.0F - BLACK_FADE_START), 0.0F, 1.0F);
+    }
+
+    /**
+     * 沿拉远方向(victim→killer身后)做方块射线检测：相机最多拉至最近方块前的
+     * {@link #WALL_INSET} 距离，实现"根据方块碰撞体积自动收近"；无遮挡时用满距离。
+     */
+    private static double computeWallClampedPullDistance(Minecraft mc, Vec3 from, double dx, double dy, double dz) {
+        if (mc.level == null || mc.player == null) {
+            return EXTRA_DIST;
+        }
+        Vec3 to = from.add(dx * EXTRA_DIST, dy * EXTRA_DIST, dz * EXTRA_DIST);
+        ClipContext ctx = new ClipContext(from, to, ClipContext.Block.OUTLINE, ClipContext.Fluid.NONE, mc.player);
+        BlockHitResult hit = mc.level.clip(ctx);
+        if (hit.getType() == HitResult.Type.BLOCK) {
+            double blocked = from.distanceTo(hit.getLocation()) - WALL_INSET;
+            return Math.max(0.6D, blocked);
+        }
+        return EXTRA_DIST;
+    }
+
     private static Side detectSide(UUID id) {
         if (id == null) {
             return Side.UNKNOWN;
@@ -1121,7 +1115,13 @@ public final class KillCamManager {
     private static void clearKillCamState(boolean restoreCamera) {
         if (restoreCamera) {
             forceRestoreCameraToPlayer();
+            // 回到本体时清空观战状态：否则无队友时 DEATH_SPOT / C4_ORBIT 的相机锁定
+            // (CameraRestrictedSpectatorMixin) 会在重生后仍把相机钉在死亡点/装弹点，
+            // 表现为"重生后视角没回到玩家本体"。
+            SpectateState.set(SpectateMode.FREE);
+            SpectatorCameraController.reset();
         }
+        blackFade = 0.0F;
         disableGray();
 
         phase = Phase.NONE;
@@ -1154,9 +1154,7 @@ public final class KillCamManager {
 
         lastNs = 0L;
 
-        lastCamX = Double.NaN;
-        lastCamY = Double.NaN;
-        lastCamZ = Double.NaN;
+        rig.reset();
 
         ghostCam = null;
 
@@ -1169,6 +1167,88 @@ public final class KillCamManager {
     }
 
     private KillCamManager() {
+    }
+
+    /**
+     * 死亡镜头相机运动模型。
+     * <p>集中管理死亡镜头的空间数学：起点(受害者眼位)、视线目标(杀手眼位)、
+     * 归一化拉远方向、方块截断后的最大拉远距离、每 tick 的拉远缓动推进，
+     * 以及基于帧间插值位置的平滑朝向。把相机"怎么动"与 {@link KillCamManager}
+     * 的"何时切相位/画 HUD"解耦，提升可读性与可调性。</p>
+     */
+    static final class DeathCamRig {
+        private double victimX;
+        private double victimY;
+        private double victimZ;
+        private double targetX;
+        private double targetY;
+        private double targetZ;
+        private double dirX;
+        private double dirY;
+        private double dirZ;
+        private double maxPull;
+        private double posX;
+        private double posY;
+        private double posZ;
+        private double prevX;
+        private double prevY;
+        private double prevZ;
+        private boolean active;
+
+        void begin(Vec3 victim, Vec3 killer, double dirX, double dirY, double dirZ, double maxPull) {
+            this.victimX = victim.x;
+            this.victimY = victim.y;
+            this.victimZ = victim.z;
+            this.targetX = killer.x;
+            this.targetY = killer.y;
+            this.targetZ = killer.z;
+            this.dirX = dirX;
+            this.dirY = dirY;
+            this.dirZ = dirZ;
+            this.maxPull = maxPull;
+            this.posX = victimX;
+            this.posY = victimY;
+            this.posZ = victimZ;
+            this.prevX = victimX;
+            this.prevY = victimY;
+            this.prevZ = victimZ;
+            this.active = true;
+        }
+
+        /** 按缓动进度推进本 tick 相机位置（s = 缓动后的 0~1）。 */
+        void pull(double easedProgress) {
+            this.prevX = posX;
+            this.prevY = posY;
+            this.prevZ = posZ;
+            this.posX = victimX + dirX * maxPull * easedProgress;
+            this.posY = victimY + dirY * maxPull * easedProgress;
+            this.posZ = victimZ + dirZ * maxPull * easedProgress;
+        }
+
+        /** 当前 tick 相机位置（喂给 ghostCam，原版会做帧间插值）。 */
+        Vec3 position() {
+            return new Vec3(posX, posY, posZ);
+        }
+
+        /** 从指定位置看向视线目标(杀手)的偏航角。 */
+        float yawAt(double fromX, double fromY, double fromZ) {
+            return (float) Math.toDegrees(Math.atan2(-(targetX - fromX), targetZ - fromZ));
+        }
+
+        /** 从指定位置看向视线目标(杀手)的俯仰角。 */
+        float pitchAt(double fromX, double fromY, double fromZ) {
+            double horizontal = Math.sqrt(
+                    (targetX - fromX) * (targetX - fromX) + (targetZ - fromZ) * (targetZ - fromZ));
+            return (float) Math.toDegrees(Math.atan2(-(targetY - fromY), horizontal));
+        }
+
+        boolean active() {
+            return active;
+        }
+
+        void reset() {
+            active = false;
+        }
     }
 
     private enum Phase {

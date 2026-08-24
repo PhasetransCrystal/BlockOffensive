@@ -52,6 +52,17 @@ public class BOUtil {
     public static int CT_COLOR = color(182, 210, 240);
     public static int T_COLOR = color(253,217,141);
 
+    /**
+     * 秒数格式化为 MM:SS（分/秒两位补零），如 60 -> "01:00"。
+     * 供 HUD 倒计时共用，避免各处重复实现同样的格式化。
+     */
+    public static String formatMinutesSeconds(int totalSeconds) {
+        totalSeconds = Math.max(0, totalSeconds);
+        int minutes = totalSeconds / 60;
+        int seconds = totalSeconds % 60;
+        return (minutes < 10 ? "0" : "") + minutes + ":" + (seconds < 10 ? "0" : "") + seconds;
+    }
+
     private static final Map<Item, ThrowableType> throwables = new ConcurrentHashMap<>();
 
     public static void registerThrowable(ThrowableType type, Item item) {

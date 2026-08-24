@@ -68,6 +68,10 @@ public class BOClientEvent {
                 BOClientWebServer.stop();
             }
         }
+        // HTTP 工作线程只读主线程构建的快照，避免并发读游戏状态
+        if (BOClientWebServer.isRunning()) {
+            BOClientWebServer.refreshSnapshot();
+        }
     }
 
     @SubscribeEvent
@@ -75,13 +79,18 @@ public class BOClientEvent {
         event.setCanceled(FPSMClient.getGlobalData().getCurrentClientTeam().map(ClientTeam::isNormal).orElse(false));
     }
 
+    // 空包仅用于向服务端标记"玩家正在移动"，无需每 tick 发送；
+    // 每 2 tick 发一次即可，大幅降低移动时的无效网络往返。
+    private static int movePacketTickCounter = 0;
+
     @SubscribeEvent
     public static void onPlayerMoveInput(MovementInputUpdateEvent event) {
         if(Minecraft.getInstance().player == null) return;
         Input input = event.getInput();
         if(!FPSMClient.getGlobalData().isCurrentGameType("csdm")) return;
 
-        if (input.left || input.right || input.up || input.down || input.shiftKeyDown) {
+        if ((input.left || input.right || input.up || input.down || input.shiftKeyDown)
+                && (++movePacketTickCounter & 1) == 0) {
             FPSMatch.sendToServer(new PlayerMoveC2SPacket());
         }
     }

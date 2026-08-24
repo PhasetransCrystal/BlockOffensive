@@ -42,7 +42,15 @@ public class ColoredPlayerCapability extends TeamCapability implements FPSMCapab
     }
 
     public TeamPlayerColor getColor(UUID uuid){
-        return colored.getOrDefault(uuid, null);
+        TeamPlayerColor color = colored.get(uuid);
+        // 玩家中途加入队伍、或存档重载(fpsm save)后队伍能力会被重建且不会再触发 onJoin，
+        // 此时若该玩家已是本队成员则补发颜色，避免名称回退为默认白色。
+        if (color == null && team.hasPlayer(uuid)) {
+            color = getEmpty();
+            colored.put(uuid, color);
+            dirty = true;
+        }
+        return color;
     }
 
     @SubscribeEvent

@@ -25,7 +25,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 
-@SuppressWarnings("all")
 public class CSDeathMessageHud{
     private final Object queueLock = new Object();
     private final LinkedList<MessageData> messageQueue = new LinkedList<>();
@@ -75,19 +74,20 @@ public class CSDeathMessageHud{
 
     private void renderKillTips(GuiGraphics guiGraphics) {
         long currentTime = System.currentTimeMillis();
+        int showTimeMs = BOConfig.client.messageShowTime.get() * 1000;
         int yOffset = getHudPositionYOffset();
 
         synchronized(queueLock) {
             messageQueue.removeIf(messageData ->
-                    currentTime - messageData.displayStartTime >= BOConfig.client.messageShowTime.get() * 1000);
+                    currentTime - messageData.displayStartTime >= showTimeMs);
 
             for (MessageData messageData : messageQueue) {
                 DeathMessage message = messageData.message;
-
+                // 宽度只计算一次，避免 renderKillMessage 内部重复计算
                 int width = calculateMessageWidth(message);
                 int x = getHudPositionXOffset(width);
 
-                renderKillMessage(guiGraphics, message, x, yOffset);
+                renderKillMessage(guiGraphics, message, x, yOffset, width);
 
                 yOffset += 16;
             }
@@ -121,9 +121,10 @@ public class CSDeathMessageHud{
     public void addKillMessage(DeathMessage message) {
         synchronized(queueLock) {
             long currentTime = System.currentTimeMillis();
+            int showTimeMs = BOConfig.client.messageShowTime.get() * 1000;
 
             messageQueue.removeIf(messageData ->
-                    currentTime - messageData.displayStartTime >= BOConfig.client.messageShowTime.get() * 1000);
+                    currentTime - messageData.displayStartTime >= showTimeMs);
 
             if (messageQueue.size() >= BOConfig.client.maxShowCount.get()) {
                 messageQueue.removeFirst();
@@ -159,13 +160,12 @@ public class CSDeathMessageHud{
         return DeathMessageRules.hasDistinctAssist(assistUUID, killerUUID);
     }
 
-    private void renderKillMessage(GuiGraphics guiGraphics, DeathMessage message, int x, int y) {
+    private void renderKillMessage(GuiGraphics guiGraphics, DeathMessage message, int x, int y, int width) {
         PoseStack poseStack = guiGraphics.pose();
         Font font = minecraft.font;
         UUID local = minecraft.player.getUUID();
         boolean isLocalPlayer = message.getKillerUUID().equals(local) || Objects.equals(message.getAssistUUID(), local);
 
-        int width = calculateMessageWidth(message);
         int height = 16;
         int bgColor = 0x80000000;
 

@@ -31,19 +31,25 @@ public record BombActionC2SPacket(boolean action) {
 
     public void handle(Supplier<NetworkEvent.Context> ctx) {
         ServerPlayer sender = ctx.get().getSender();
-        Optional<BaseMap> optional = FPSMCore.getInstance().getMapByPlayer(sender);
-        if (optional.isEmpty() || sender == null) {
-            ctx.get().setPacketHandled(true);
-            return;
-        }
-        BaseMap map = optional.get();
-        ServerTeam team = map.getMapTeams().getTeamByPlayer(sender).orElse(null);
-        if (team == null) {
-            ctx.get().setPacketHandled(true);
-            return;
-        }
-
+        // 所有 map/team 查询都必须在 enqueueWork 内于服务端主线程执行，
+        // 避免在 netty 线程读 FPSMCore 的非线程安全缓存而引发数据竞争。
         ctx.get().enqueueWork(() -> {
+            if (sender == null) {
+                ctx.get().setPacketHandled(true);
+                return;
+            }
+            Optional<BaseMap> optional = FPSMCore.getInstance().getMapByPlayer(sender);
+            if (optional.isEmpty()) {
+                ctx.get().setPacketHandled(true);
+                return;
+            }
+            BaseMap map = optional.get();
+            ServerTeam team = map.getMapTeams().getTeamByPlayer(sender).orElse(null);
+            if (team == null) {
+                ctx.get().setPacketHandled(true);
+                return;
+            }
+
             if (map instanceof CSGameMap csGameMap && !csGameMap.checkCanPlacingBombs(team.getFixedName())) {
                 List<? extends CompositionC4Entity> entities = sender.serverLevel().getEntities(EntityTypeTest.forClass(CompositionC4Entity.class),(t)->{
                     LivingEntity player = t.getDemolisher();

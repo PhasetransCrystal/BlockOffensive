@@ -24,7 +24,18 @@ public class BOClientWebServer {
     private static HttpServer server;
     private static final Gson gson = new Gson();
 
+    /**
+     * 主线程构建的不可变响应快照。HTTP 工作线程只读取该 volatile 引用，
+     * 不再直接访问由游戏主线程每 tick 写入的 {@link CSClientData} 等可变状态，
+     * 消除跨线程数据竞争。
+     */
+    private static volatile Map<String, Object> snapshot;
+
     //TODO Server side logic
+
+    public static boolean isRunning() {
+        return server != null;
+    }
 
     public static void start() {
         // 检查端口是否被占用
@@ -51,6 +62,59 @@ public class BOClientWebServer {
         }
     }
 
+    /**
+     * 在游戏主线程每 tick 调用，重建不可变响应快照。
+     * <p>所有对客户端游戏状态(CSClientData/玩家数据/武器数据)的读取都在主线程完成，
+     * HTTP 线程只读取 {@link #snapshot} 这一单个 volatile 引用。
+     */
+    public static void refreshSnapshot() {
+        FPSMClientGlobalData globalData = FPSMClient.getGlobalData();
+
+        Map<String, Object> response = new HashMap<>();
+
+        response.put("currentMapSupportShop", CSClientData.currentMapSupportShop);
+        response.put("cTWinnerRounds", CSClientData.cTWinnerRounds);
+        response.put("tWinnerRounds", CSClientData.tWinnerRounds);
+        response.put("time", CSClientData.time);
+        response.put("isDebug", CSClientData.isDebug);
+        response.put("isStart", CSClientData.isStart);
+        response.put("isError", CSClientData.isError);
+        response.put("isPause", CSClientData.isPause);
+        response.put("isWaiting", CSClientData.isWaiting);
+        response.put("isWarmTime", CSClientData.isWarmTime);
+        response.put("isWaitingWinner", CSClientData.isWaitingWinner);
+        response.put("canOpenShop", CSClientData.canOpenShop);
+        response.put("shopCloseTime", CSClientData.shopCloseTime);
+        response.put("nextRoundMoney", CSClientData.nextRoundMoney);
+        response.put("dismantleBombProgress", CSClientData.dismantleBombProgress);
+        response.put("bombFuse", CSClientData.bombFuse);
+        response.put("bombTotalFuse", CSClientData.bombTotalFuse);
+
+        Map<String, Object> tabData = new HashMap<>();
+        for (ClientTeam clientTeam : globalData.getTeams()) {
+
+            String team = clientTeam.name;
+            if(team.equals("spectator")) continue;
+            for (PlayerData data : clientTeam.players.values()){
+                UUID uuid = data.getOwner();
+                Map<String, Object> playerData = new HashMap<>();
+                playerData.put("name", data.name().getString());
+                playerData.put("team", team);
+                playerData.putAll(data.mappedInfo());
+                playerData.put("money", globalData.getPlayerMoney(uuid));
+                playerData.put("health",data.getHealthPercent() * 100);
+                WeaponData weaponData = CSClientData.getWeaponData(uuid);
+                playerData.put("items", weaponData.weaponData());
+                playerData.put("bpAttributeHasHelmet", weaponData.bpAttributeHasHelmet());
+                playerData.put("bpAttributeDurability", weaponData.bpAttributeDurability());
+                tabData.put(uuid.toString(), playerData);
+            }
+        }
+        response.put("tabData", tabData);
+
+        snapshot = response;
+    }
+
     static class CSDataHandler implements HttpHandler {
         @Override
         public void handle(HttpExchange exchange) throws IOException {
@@ -58,51 +122,9 @@ public class BOClientWebServer {
                 exchange.sendResponseHeaders(405, -1);
                 return;
             }
-            FPSMClientGlobalData globalData = FPSMClient.getGlobalData();
-
-            Map<String, Object> response = new HashMap<>();
-
-            response.put("currentMapSupportShop", CSClientData.currentMapSupportShop);
-            response.put("cTWinnerRounds", CSClientData.cTWinnerRounds);
-            response.put("tWinnerRounds", CSClientData.tWinnerRounds);
-            response.put("time", CSClientData.time);
-            response.put("isDebug", CSClientData.isDebug);
-            response.put("isStart", CSClientData.isStart);
-            response.put("isError", CSClientData.isError);
-            response.put("isPause", CSClientData.isPause);
-            response.put("isWaiting", CSClientData.isWaiting);
-            response.put("isWarmTime", CSClientData.isWarmTime);
-            response.put("isWaitingWinner", CSClientData.isWaitingWinner);
-            response.put("canOpenShop", CSClientData.canOpenShop);
-            response.put("shopCloseTime", CSClientData.shopCloseTime);
-            response.put("nextRoundMoney", CSClientData.nextRoundMoney);
-            response.put("dismantleBombProgress", CSClientData.dismantleBombProgress);
-            response.put("bombFuse", CSClientData.bombFuse);
-            response.put("bombTotalFuse", CSClientData.bombTotalFuse);
-
-            Map<String, Object> tabData = new HashMap<>();
-            for (ClientTeam clientTeam : globalData.getTeams()) {
-
-                String team = clientTeam.name;
-                if(team.equals("spectator")) continue;
-                for (PlayerData data : clientTeam.players.values()){
-                    UUID uuid = data.getOwner();
-                    Map<String, Object> playerData = new HashMap<>();
-                    playerData.put("name", data.name().getString());
-                    playerData.put("team", team);
-                    playerData.putAll(data.mappedInfo());
-                    playerData.put("money", globalData.getPlayerMoney(uuid));
-                    playerData.put("health",data.getHealthPercent() * 100);
-                    WeaponData weaponData = CSClientData.getWeaponData(uuid);
-                    playerData.put("items", weaponData.weaponData());
-                    playerData.put("bpAttributeHasHelmet", weaponData.bpAttributeHasHelmet());
-                    playerData.put("bpAttributeDurability", weaponData.bpAttributeDurability());
-                    tabData.put(uuid.toString(), playerData);
-                }
-            }
-            response.put("tabData", tabData);
-
-            sendResponse(exchange, response);
+            // 只读取主线程写好的不可变快照引用；若尚未生成返回空映射
+            Map<String, Object> snap = snapshot;
+            sendResponse(exchange, snap == null ? new HashMap<>() : snap);
         }
     }
 

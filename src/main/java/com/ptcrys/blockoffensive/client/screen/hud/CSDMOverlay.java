@@ -2,6 +2,7 @@ package com.ptcrys.blockoffensive.client.screen.hud;
 
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.ptcrys.blockoffensive.client.data.CSClientData;
+import com.ptcrys.blockoffensive.util.BOUtil;
 import com.ptcrys.fpsmatch.core.data.PlayerData;
 import com.ptcrys.fpsmatch.util.RenderUtil;
 import net.minecraft.ChatFormatting;
@@ -147,18 +148,12 @@ public class CSDMOverlay {
     }
 
     public static String formatTime(int totalSeconds) {
-        int remainingMinutes = totalSeconds / 60;
-        int remainingSecondsPart = totalSeconds % 60;
-
-        if (remainingMinutes == 0 && remainingSecondsPart <= 10) {
+        if (totalSeconds / 60 == 0 && totalSeconds % 60 <= 10) {
             textRoundTimeColor = color(240, 40, 40);
         } else {
             textRoundTimeColor = color(255, 255, 255);
         }
 
-        String minutesPart = String.format("%02d", remainingMinutes);
-        String secondsPart = String.format("%02d", remainingSecondsPart);
-
-        return minutesPart + ":" + secondsPart;
+        return BOUtil.formatMinutesSeconds(totalSeconds);
     }
 }

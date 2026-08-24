@@ -88,7 +88,7 @@ public class PhysicsModCompat {
         Entity entity = level.getEntity(EntityId);
         if (entity == null) return false;
 
-        if (entity instanceof LivingEntity living && RenderSystem.isOnRenderThread() && ConfigMobs.getMobSetting(entity).getType() != MobPhysicsType.OFF) {
+        if (entity instanceof LivingEntity && RenderSystem.isOnRenderThread() && ConfigMobs.getMobSetting(entity).getType() != MobPhysicsType.OFF) {
             PhysicsMod mod = PhysicsMod.getInstance(level);
             if (ConfigMobs.getMobSetting(entity).getType() != MobPhysicsType.OFF) {
                 if (mod.alreadyBlockified.contains(entity.getId())) {

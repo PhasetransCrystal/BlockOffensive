@@ -47,17 +47,23 @@ public final class BOSpecManager {
     private static final float ORBIT_RADIUS = 4.0F;
     private static final long DEDUP_NS = 250_000_000L;
     private static final long KILLCAM_CONTEXT_TTL_TICKS = 200L;
+    /** 击杀回放时限(tick)：窗口内服务端不自动接管相机，避免附着包抢先触发杀死回放。 */
+    private static final long KILLCAM_WINDOW_TICKS = 90L;
     private static final Map<UUID, SpectateMode> MODES = new ConcurrentHashMap<>();
     private static final Map<UUID, Long> LAST_KILLCAM_NS = new ConcurrentHashMap<>();
     private static final Map<UUID, KillCamDeathContext> DEATH_CONTEXTS = new ConcurrentHashMap<>();
+    /** 每个死亡玩家应在该 tick 之后才允许自动接管相机（击杀回放结束）。 */
+    private static final Map<UUID, Long> ATTACH_AFTER_TICK = new ConcurrentHashMap<>();
 
     private BOSpecManager() {
     }
 
     public static void startSpectating(ServerPlayer spectator) {
+        // 死亡入口：仅记录死亡位姿，不立即绑定目标。
+        // 自动接管由 onPlayerTick 在击杀回放窗口结束后执行；
+        // 显式附着请求(击杀回放 FADE 结束)走 requestAttachTeammate 立即接管。
         if (spectator == null || !spectator.isSpectator()) return;
         DamagePosTracker.recordDeathPose(spectator);
-        selectAndApplyTarget(spectator);
     }
 
     public static void recordKillCamContext(ServerPlayer dead, ServerPlayer killer, BaseMap map) {
@@ -104,6 +110,8 @@ public final class BOSpecManager {
         long now = System.nanoTime();
         Long previous = LAST_KILLCAM_NS.put(dead.getUUID(), now);
         if (previous != null && now - previous < DEDUP_NS) return;
+        // 击杀回放窗口开启：在窗口结束前，服务端不自动接管该玩家的相机
+        ATTACH_AFTER_TICK.put(dead.getUUID(), dead.serverLevel().getGameTime() + KILLCAM_WINDOW_TICKS);
         ItemStack copy = weapon == null ? ItemStack.EMPTY : weapon.copy();
         if (!copy.isEmpty()) copy.setCount(1);
         LOG.debug("Sending killcam to {} from {}", dead.getGameProfile().getName(), killer.getGameProfile().getName());
@@ -117,11 +125,21 @@ public final class BOSpecManager {
     public static void onPlayerTick(TickEvent.PlayerTickEvent event) {
         if (event.side.isClient() || event.phase != TickEvent.Phase.END) return;
         if (!(event.player instanceof ServerPlayer spectator)) return;
+        UUID id = spectator.getUUID();
         if (!spectator.isSpectator()) {
-            MODES.remove(spectator.getUUID());
+            MODES.remove(id);
+            ATTACH_AFTER_TICK.remove(id);
             return;
         }
-        SpectateMode mode = MODES.get(spectator.getUUID());
+        // 击杀回放窗口内不自动接管相机，避免附着包抢先触发打断回放
+        Long attachAfter = ATTACH_AFTER_TICK.get(id);
+        if (attachAfter != null) {
+            if (spectator.serverLevel().getGameTime() < attachAfter) {
+                return;
+            }
+            ATTACH_AFTER_TICK.remove(id);
+        }
+        SpectateMode mode = MODES.get(id);
         if (mode == null) {
             selectAndApplyTarget(spectator);
         } else if (mode == SpectateMode.TEAMMATE && !isCameraOnTeammate(spectator)) {
@@ -139,7 +157,12 @@ public final class BOSpecManager {
     }
 
     public static void requestAttachTeammate(ServerPlayer spectator) {
-        startSpectating(spectator);
+        // 显式附着请求(击杀回放 FADE 结束)立即接管，并清除自动接管窗口
+        if (spectator == null) return;
+        ATTACH_AFTER_TICK.remove(spectator.getUUID());
+        if (spectator.isSpectator()) {
+            selectAndApplyTarget(spectator);
+        }
     }
 
     public static void switchTeammate(ServerPlayer spectator, SwitchSpectateC2SPacket.SwitchDirection direction) {
@@ -159,6 +182,13 @@ public final class BOSpecManager {
     }
 
     private static void selectAndApplyTarget(ServerPlayer spectator) {
+        // 仅接管"由死亡流程进入观战"(setBystander -> startSpectating 记录过死亡位姿)的玩家。
+        // 手动切换旁观者(/gamemode spectator)的存活玩家没有死亡位姿，
+        // 若被接管会让相机钉在其本体位置(DEATH_SPOT 回退到 getEyePosition)，
+        // 表现为"没死但切旁观后视角异常"。手动旁观保持原版自由相机。
+        if (spectator == null || DamagePosTracker.getDeathPose(spectator).isEmpty()) {
+            return;
+        }
         Optional<BaseMap> map = FPSMCore.getInstance().getMapByPlayer(spectator);
         if (map.isEmpty()) return;
         ServerTeam team = map.get().getMapTeams().getTeamByPlayer(spectator).orElse(null);

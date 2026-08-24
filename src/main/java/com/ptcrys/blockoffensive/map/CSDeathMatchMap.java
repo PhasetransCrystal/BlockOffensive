@@ -222,6 +222,12 @@ public class CSDeathMatchMap extends CSMap {
     }
 
     @Override
+    protected boolean canReadyStart() {
+        // 死亡竞技为自由混战模式，不应等待全员准备；始终走自动开始倒计时
+        return false;
+    }
+
+    @Override
     public void recordHurtData(ServerPlayer hurt, DamageSource source, float amount) {
         if (isTDM()) {
             super.recordHurtData(hurt, source, amount);

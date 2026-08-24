@@ -143,7 +143,7 @@ dependencies {
     modRuntimeOnly "maven.modrinth:timeless-and-classics-zero:${tacz_version}"
     modImplementation "maven.modrinth:lr-tactical:${lrtactical_version}"
     modImplementation "maven.modrinth:cloth-config:${cloth_config_version}"
-    modImplementation('com.phasetranscrystal:fpsmatch') { transitive = false }
+    modImplementation('com.ptcrys:fpsmatch') { transitive = false }
     modImplementation "maven.modrinth:counterstrikegrenade:${cs_grenade_version}"
     modRuntimeOnly "maven.modrinth:kotlin-for-forge:${kotlin_forge_version}"
     modImplementation "maven.modrinth:hit-indication:${hit_indication_version}"

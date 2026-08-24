@@ -16,7 +16,7 @@ rootProject.name = 'BlockOffensive'
 
 includeBuild('FPSMatch') {
     dependencySubstitution {
-        substitute module('com.phasetranscrystal:fpsmatch') using project(':')
+        substitute module('com.ptcrys:fpsmatch') using project(':')
     }
 }
 

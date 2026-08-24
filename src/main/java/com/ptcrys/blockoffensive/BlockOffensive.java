@@ -62,6 +62,9 @@ public class BlockOffensive {
     {
         IEventBus modEventBus = context.getModEventBus();
         modEventBus.addListener(this::commonSetup);
+        // InterModEnqueueEvent 是 MOD 生命周期事件，只会在 mod 事件总线上触发，
+        // 必须通过 modEventBus.addListener 注册，而不是挂到游戏总线 MinecraftForge.EVENT_BUS。
+        modEventBus.addListener(this::onEnqueue);
         MinecraftForge.EVENT_BUS.register(this);
         BOItemRegister.ITEMS.register(modEventBus);
         BOItemRegister.TABS.register(modEventBus);
@@ -143,7 +146,7 @@ public class BlockOffensive {
     private static void registerCompat() {
         // 物理模组兼容
         if (BOImpl.isPhysicsModLoaded()) {
-            DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> PhysicsModCompat.init());
+            DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> PhysicsModCompat::init);
         }
         // CS Grenade 兼容
         if (FPSMImpl.findCounterStrikeGrenadesMod()) {

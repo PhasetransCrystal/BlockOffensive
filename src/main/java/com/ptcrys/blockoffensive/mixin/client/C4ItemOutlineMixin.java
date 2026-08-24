@@ -11,6 +11,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.api.distmarker.OnlyIn;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
@@ -19,8 +20,11 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 @Mixin(Entity.class)
 public abstract class C4ItemOutlineMixin {
 
+    @Unique
     private static final int T_C4_OUTLINE_COLOR = 0xEAC055;
+    @Unique
     private static final double C4_OUTLINE_RENDER_DISTANCE = 128.0D;
+    @Unique
     private static final double C4_OUTLINE_RENDER_DISTANCE_SQR = C4_OUTLINE_RENDER_DISTANCE * C4_OUTLINE_RENDER_DISTANCE;
 
     @Inject(method = "isCurrentlyGlowing", at = @At("HEAD"), cancellable = true)
@@ -30,7 +34,7 @@ public abstract class C4ItemOutlineMixin {
             return;
         }
 
-        cir.setReturnValue(canLocalPlayerSeeDroppedC4Outline());
+        cir.setReturnValue(blockOffensive$canLocalPlayerSeeDroppedC4Outline());
     }
 
     @Inject(method = "getTeamColor", at = @At("HEAD"), cancellable = true)
@@ -40,7 +44,7 @@ public abstract class C4ItemOutlineMixin {
             return;
         }
 
-        if (canLocalPlayerSeeDroppedC4Outline()) {
+        if (blockOffensive$canLocalPlayerSeeDroppedC4Outline()) {
             cir.setReturnValue(T_C4_OUTLINE_COLOR);
         }
     }
@@ -52,7 +56,7 @@ public abstract class C4ItemOutlineMixin {
             return;
         }
 
-        if (canLocalPlayerSeeDroppedC4Outline()) {
+        if (blockOffensive$canLocalPlayerSeeDroppedC4Outline()) {
             cir.setReturnValue(distanceSqr < C4_OUTLINE_RENDER_DISTANCE_SQR);
         }
     }
@@ -65,7 +69,8 @@ public abstract class C4ItemOutlineMixin {
         return stack.is(BOItemRegister.C4.get());
     }
 
-    private static boolean canLocalPlayerSeeDroppedC4Outline() {
+    @Unique
+    private static boolean blockOffensive$canLocalPlayerSeeDroppedC4Outline() {
         Minecraft minecraft = Minecraft.getInstance();
         LocalPlayer localPlayer = minecraft.player;
         if (localPlayer == null) {

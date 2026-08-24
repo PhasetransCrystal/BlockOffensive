@@ -24,6 +24,10 @@ public class CSGameOverlay {
     public static int noColor = color(0,0,0,0);
     public static int textRoundTimeColor = color(255,255,255);
 
+    // 每帧绘制复用的静态文案（参数不变，避免每帧重建 Component）
+    private static final Component LIVING_TEXT = Component.translatable("blockoffensive.hud.living").withStyle(ChatFormatting.BOLD);
+    private static final Component TIME_PLACEHOLDER = Component.translatable("blockoffensive.hud.time_placeholder").withStyle(ChatFormatting.BOLD);
+
     private final Map<UUID,String> cachedName = new HashMap<>();
 
     public void render(GuiGraphics guiGraphics, int screenWidth, int screenHeight) {
@@ -100,7 +104,7 @@ public class CSGameOverlay {
 
         // CT "存活" 文字
         float smallScale = numberScale * 0.5f; // 恢复为数字大小的一半
-        Component livingText = Component.translatable("blockoffensive.hud.living").withStyle(ChatFormatting.BOLD);
+        Component livingText = LIVING_TEXT;
         int smallTextWidth = font.width(livingText);
 
         guiGraphics.pose().pushPose();
@@ -254,7 +258,7 @@ public class CSGameOverlay {
 
     private Component getRoundTimeString() {
         if(CSClientData.time == -1 && !CSClientData.isWaitingWinner) {
-            return Component.translatable("blockoffensive.hud.time_placeholder").withStyle(ChatFormatting.BOLD);
+            return TIME_PLACEHOLDER;
         }
         return getCSGameTime();
     }
@@ -501,7 +505,7 @@ public class CSGameOverlay {
      * @return 格式化的时间字符串，如 "01:00"
      */
     public static String formatTime(int totalSeconds) {
-        // 计算剩余的分钟和秒
+        // 倒计时剩余 <=10 秒时变红
         int remainingMinutes = totalSeconds / 60;
         int remainingSecondsPart = totalSeconds % 60;
 
@@ -511,10 +515,7 @@ public class CSGameOverlay {
             textRoundTimeColor = color(255,255,255);
         }
 
-        String minutesPart = String.format("%02d", remainingMinutes);
-        String secondsPart = String.format("%02d", remainingSecondsPart);
-
-        return minutesPart + ":" + secondsPart;
+        return BOUtil.formatMinutesSeconds(totalSeconds);
     }
 
 }

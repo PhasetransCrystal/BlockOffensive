@@ -3,7 +3,6 @@ package com.ptcrys.blockoffensive.client.screen.hud;
 import com.ptcrys.fpsmatch.common.client.FPSMClient;
 import com.ptcrys.fpsmatch.core.data.PlayerData;
 import com.ptcrys.fpsmatch.util.RenderUtil;
-import net.minecraft.ChatFormatting;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.PlayerFaceRenderer;
 import net.minecraft.client.multiplayer.PlayerInfo;
@@ -13,10 +12,15 @@ import net.minecraft.world.scores.Scoreboard;
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 public class CSDMTabRenderer extends CSGameTabRenderer {
+
+    private static final int COL_KD = 35;
+    private static final int COL_SCORE = 48;
 
     @Override
     public String getGameType() {
@@ -25,153 +29,98 @@ public class CSDMTabRenderer extends CSGameTabRenderer {
 
     @Override
     public void render(GuiGraphics guiGraphics, int windowWidth, List<PlayerInfo> playerInfoList, Scoreboard scoreboard, Objective objective) {
-        // 列宽定义
-        int padding = 5;
-        int pingWidth = 40;
-        int avatarSize = 12;
-        int nameWidth = 110;
-        int killsWidth = 35;
-        int deathsWidth = 35;
-        int assistsWidth = 35;
-        int kdWidth = 35;
-        int headshotWidth = 40;
-        int damageWidth = 48;
-        int scoreWidth = 48;
+        int playerAreaWidth = PLAYER_AREA_WIDTH;
+        int playerRowHeight = ROW_HEIGHT;
+        int playerGap = ROW_GAP;
+        int headerHeight = HEADER_HEIGHT;
+        int bgPadding = BG_PADDING;
 
-        // 玩家信息区域固定尺寸
-        int playerAreaWidth = 400;
-        int playerRowHeight = 12;
-        int playerGap = 2;
-        int headerHeight = 12;
-
-        // 过滤并排序玩家
+        // 死亡竞技每个玩家各自成队(队伍名为数字)，遍历所有队伍收集玩家，避免阵营名误用 ct/t 导致列表为空
         Map<String, List<PlayerInfo>> teamPlayers = RenderUtil.getTeamsPlayerInfo(playerInfoList);
-        List<PlayerInfo> allPlayers = new ArrayList<>(teamPlayers.getOrDefault("ct", List.of()));
-        allPlayers.addAll(teamPlayers.getOrDefault("t", List.of()));
+        List<PlayerInfo> allPlayers = new ArrayList<>();
+        for (List<PlayerInfo> players : teamPlayers.values()) {
+            allPlayers.addAll(players);
+        }
+
+        // 每帧只索引一次玩家数据，供排序与行渲染复用
+        Map<UUID, PlayerData> playerDataById = indexPlayerData(playerInfoList);
 
         // 按得分排序
-        Comparator<PlayerInfo> scoreComparator = (p1, p2) -> {
-            int t1 = FPSMClient.getGlobalData().getPlayerData(p1.getProfile().getId())
-                    .map(PlayerData::getScores).orElse(0);
-            int t2 = FPSMClient.getGlobalData().getPlayerData(p2.getProfile().getId())
-                    .map(PlayerData::getScores).orElse(0);
-            return Integer.compare(t2, t1);
-        };
-
+        Comparator<PlayerInfo> scoreComparator = (p1, p2) -> Integer.compare(
+                scoresOf(playerDataById, p2), scoresOf(playerDataById, p1));
         allPlayers.sort(scoreComparator);
 
-        // 计算实际玩家数量
         int playerCount = allPlayers.size();
-
-        // 计算内容高度
         int contentHeight = playerCount > 0 ? (playerRowHeight + playerGap) * playerCount - playerGap : 0;
-
-        // 计算总内容高度
         int totalContentHeight = headerHeight + contentHeight;
 
-        // 背景尺寸（玩家信息栏+边距）
-        int bgPadding = 10;
+        // 背景（屏幕居中）
         int bgWidth = playerAreaWidth + bgPadding * 2;
         int bgHeight = totalContentHeight + bgPadding * 2;
-
-        // 背景位置（屏幕居中）
         int bgX = (windowWidth - bgWidth) / 2;
         int bgY = (minecraft.getWindow().getGuiScaledHeight() - bgHeight) / 2;
-
-        // 渲染背景
         guiGraphics.fill(bgX, bgY, bgX + bgWidth, bgY + bgHeight, 0x80000000);
 
-        // 表头位置
         int headerY = bgY + bgPadding;
-
-        // 计算玩家起始Y坐标（表头下方）
         int playerStartY = headerY + headerHeight + 2;
 
         // 渲染表头
-        int currentHeaderX = bgX + bgPadding;
-
-        // Ping图标（满格）
-        guiGraphics.pose().pushPose();
-        guiGraphics.pose().translate(0.0F, 0.0F, 100.0F);
-        guiGraphics.blit(GUI_ICONS_LOCATION, currentHeaderX + (pingWidth - 10) / 2, headerY + 2, 0, 176, 10, 8);
-        guiGraphics.pose().popPose();
-        currentHeaderX += pingWidth;
-
-        // 占位
-        currentHeaderX += avatarSize + nameWidth + padding;
-
-        // 杀敌数
-        Component killsText = Component.translatable("blockoffensive.tab.header.kills").withStyle(ChatFormatting.BOLD);
-        guiGraphics.drawString(minecraft.font, killsText,
-                currentHeaderX + (killsWidth - minecraft.font.width(killsText)) / 2, headerY, 0xFFFFFFFF);
-        currentHeaderX += killsWidth;
-
-        // 死亡数
-        Component deathsText = Component.translatable("blockoffensive.tab.header.deaths").withStyle(ChatFormatting.BOLD);
-        guiGraphics.drawString(minecraft.font, deathsText,
-                currentHeaderX + (deathsWidth - minecraft.font.width(deathsText)) / 2, headerY, 0xFFFFFFFF);
-        currentHeaderX += deathsWidth;
-
-        // 助攻数
-        Component assistsText = Component.translatable("blockoffensive.tab.header.assists").withStyle(ChatFormatting.BOLD);
-        guiGraphics.drawString(minecraft.font, assistsText,
-                currentHeaderX + (assistsWidth - minecraft.font.width(assistsText)) / 2, headerY, 0xFFFFFFFF);
-        currentHeaderX += assistsWidth;
-
-        // KD
-        Component kdText = Component.translatable("blockoffensive.tab.header.kd").withStyle(ChatFormatting.BOLD);
-        guiGraphics.drawString(minecraft.font, kdText,
-                currentHeaderX + (kdWidth - minecraft.font.width(kdText)) / 2, headerY, 0xFFFFFFFF);
-        currentHeaderX += kdWidth;
-
-        // 爆头率
-        Component headshotText = Component.translatable("blockoffensive.tab.header.headshot").withStyle(ChatFormatting.BOLD);
-        guiGraphics.drawString(minecraft.font, headshotText,
-                currentHeaderX + (headshotWidth - minecraft.font.width(headshotText)) / 2, headerY, 0xFFFFFFFF);
-        currentHeaderX += headshotWidth;
-
-        // 伤害
-        Component damageText = Component.translatable("blockoffensive.tab.header.damage").withStyle(ChatFormatting.BOLD);
-        guiGraphics.drawString(minecraft.font, damageText,
-                currentHeaderX + (damageWidth - minecraft.font.width(damageText)) / 2, headerY, 0xFFFFFFFF);
-        currentHeaderX += damageWidth;
-
-        // 得分
-        Component scoreText = Component.translatable("blockoffensive.tab.header.score").withStyle(ChatFormatting.BOLD);
-        guiGraphics.drawString(minecraft.font, scoreText,
-                currentHeaderX + (scoreWidth - minecraft.font.width(scoreText)) / 2, headerY, 0xFFFFFFFF);
+        renderHeader(guiGraphics, bgX + bgPadding, headerY);
 
         // 渲染所有玩家
         int currentY = playerStartY;
         for (PlayerInfo player : allPlayers) {
-            renderDeathmatchPlayerRow(guiGraphics, player, bgX + bgPadding, currentY, playerAreaWidth, playerRowHeight);
+            renderDeathmatchPlayerRow(guiGraphics, player, bgX + bgPadding, currentY, playerAreaWidth, playerRowHeight, playerDataById);
             currentY += playerRowHeight + playerGap;
         }
     }
 
-    private void renderDeathmatchPlayerRow(GuiGraphics guiGraphics, PlayerInfo player, int x, int y, int width, int height) {
-        PlayerData tabData = FPSMClient.getGlobalData().getPlayerData(player.getProfile().getId()).orElse(null);
+    private void renderHeader(GuiGraphics guiGraphics, int headerX, int headerY) {
+        int currentHeaderX = headerX;
+
+        // Ping图标（满格）
+        guiGraphics.pose().pushPose();
+        guiGraphics.pose().translate(0.0F, 0.0F, 100.0F);
+        guiGraphics.blit(GUI_ICONS_LOCATION, currentHeaderX + (COL_PING - 10) / 2, headerY + 2, 0, 176, 10, 8);
+        guiGraphics.pose().popPose();
+        currentHeaderX += COL_PING;
+
+        // 占位（头像+昵称）
+        currentHeaderX += AVATAR_SIZE + COL_NAME + COL_PADDING;
+
+        // 杀敌数
+        currentHeaderX = drawHeaderLabel(guiGraphics, currentHeaderX, headerY, "blockoffensive.tab.header.kills", COL_KILL);
+        // 死亡数
+        currentHeaderX = drawHeaderLabel(guiGraphics, currentHeaderX, headerY, "blockoffensive.tab.header.deaths", COL_DEATH);
+        // 助攻数
+        currentHeaderX = drawHeaderLabel(guiGraphics, currentHeaderX, headerY, "blockoffensive.tab.header.assists", COL_ASSIST);
+        // KD
+        currentHeaderX = drawHeaderLabel(guiGraphics, currentHeaderX, headerY, "blockoffensive.tab.header.kd", COL_KD);
+        // 爆头率
+        currentHeaderX = drawHeaderLabel(guiGraphics, currentHeaderX, headerY, "blockoffensive.tab.header.headshot", COL_HEADSHOT);
+        // 伤害
+        currentHeaderX = drawHeaderLabel(guiGraphics, currentHeaderX, headerY, "blockoffensive.tab.header.damage", COL_DAMAGE);
+        // 得分
+        drawHeaderLabel(guiGraphics, currentHeaderX, headerY, "blockoffensive.tab.header.score", COL_SCORE);
+    }
+
+    /** 居中绘制表头标签并返回下一列 x。 */
+    private int drawHeaderLabel(GuiGraphics guiGraphics, int x, int y, String translationKey, int columnWidth) {
+        Component text = Component.translatable(translationKey);
+        guiGraphics.drawString(minecraft.font, text, x + (columnWidth - minecraft.font.width(text)) / 2, y, 0xFFFFFFFF);
+        return x + columnWidth;
+    }
+
+    private void renderDeathmatchPlayerRow(GuiGraphics guiGraphics, PlayerInfo player, int x, int y,
+                                           int width, int height, Map<UUID, PlayerData> playerDataById) {
+        PlayerData tabData = playerDataById.get(player.getProfile().getId());
         if (tabData == null) {
             return;
         }
         boolean isLocalPlayer = player.getProfile().getId().equals(minecraft.player.getUUID());
 
-        // 背景 - 如果是本地玩家，使用高亮背景
-        int bgColor = isLocalPlayer ? 0x40FFFFFF : 0x40000000;
-        guiGraphics.fill(x, y, x + width, y + height, bgColor);
-
-        // 列宽定义
-        int padding = 5;
-        int pingWidth = 40;
-        int avatarSize = 12;
-        int nameWidth = 110;
-        int killsWidth = 35;
-        int deathsWidth = 35;
-        int assistsWidth = 35;
-        int kdWidth = 35;
-        int headshotWidth = 40;
-        int damageWidth = 48;
-        int scoreWidth = 48;
+        // 背景 - 本地玩家高亮
+        guiGraphics.fill(x, y, x + width, y + height, isLocalPlayer ? 0x40FFFFFF : 0x40000000);
 
         int textY = y + (height - 8) / 2;
         int currentX = x;
@@ -179,65 +128,46 @@ public class CSDMTabRenderer extends CSGameTabRenderer {
         // Ping值
         String pingText = String.valueOf(player.getLatency());
         guiGraphics.drawString(minecraft.font, pingText,
-                currentX + (pingWidth - minecraft.font.width(pingText)) / 2, textY, RenderUtil.color(25,180,60));
-        currentX += pingWidth;
+                currentX + (COL_PING - minecraft.font.width(pingText)) / 2, textY, RenderUtil.color(25, 180, 60));
+        currentX += COL_PING;
 
         // 头像
-        PlayerFaceRenderer.draw(guiGraphics, player.getSkinLocation(), currentX, y, avatarSize);
-        currentX += avatarSize + padding;
+        PlayerFaceRenderer.draw(guiGraphics, player.getSkinLocation(), currentX, y, AVATAR_SIZE);
+        currentX += AVATAR_SIZE + COL_PADDING;
 
         // 玩家名（左对齐）
         guiGraphics.drawString(minecraft.font, getNameForDisplay(player), currentX, textY, 0xFFFFFFFF);
 
-        // 杀敌数
-        int killsX = x + pingWidth + avatarSize + padding + nameWidth;
-        String kills = String.valueOf(tabData.getKills());
-        guiGraphics.drawString(minecraft.font, kills,
-                killsX + (killsWidth - minecraft.font.width(kills)) / 2, textY, 0xFFFFFFFF);
-
-        // 死亡数
-        int deathsX = killsX + killsWidth;
-        String deaths = String.valueOf(tabData.getDeaths());
-        guiGraphics.drawString(minecraft.font, deaths,
-                deathsX + (deathsWidth - minecraft.font.width(deaths)) / 2, textY, 0xFFFFFFFF);
-
-        // 助攻数
-        int assistsX = deathsX + deathsWidth;
-        String assists = String.valueOf(tabData.getAssists());
-        guiGraphics.drawString(minecraft.font, assists,
-                assistsX + (assistsWidth - minecraft.font.width(assists)) / 2, textY, 0xFFFFFFFF);
-
-        // KD
-        int kdX = assistsX + assistsWidth;
-        float kd = tabData.getKD();
-        String kdStr = String.format("%.2f", kd);
-        guiGraphics.drawString(minecraft.font, kdStr,
-                kdX + (kdWidth - minecraft.font.width(kdStr)) / 2, textY, 0xFFFFFFFF);
+        // 数据列起点（表头对齐）
+        int dataX = x + ROW_NAME_AREA;
+        dataX = drawCenteredCell(guiGraphics, String.valueOf(tabData.getKills()), dataX, COL_KILL, textY);
+        dataX = drawCenteredCell(guiGraphics, String.valueOf(tabData.getDeaths()), dataX, COL_DEATH, textY);
+        dataX = drawCenteredCell(guiGraphics, String.valueOf(tabData.getAssists()), dataX, COL_ASSIST, textY);
+        dataX = drawCenteredCell(guiGraphics, String.format("%.2f", tabData.getKD()), dataX, COL_KD, textY);
 
         // 爆头率
-        int headshotX = kdX + kdWidth;
-        float headshotRate = tabData.getHeadshotRate();
-        String headshotPercentage = headshotRate > 0
-                ? String.format("%.0f%%", headshotRate * 100)
-                : "0%";
-        guiGraphics.drawString(minecraft.font, headshotPercentage,
-                headshotX + (headshotWidth - minecraft.font.width(headshotPercentage)) / 2, textY, 0xFFFFFFFF);
+        String headshotStr = tabData.getHeadshotRate() > 0 ? ((int) (tabData.getHeadshotRate() * 100)) + "%" : "0%";
+        dataX = drawCenteredCell(guiGraphics, headshotStr, dataX, COL_HEADSHOT, textY);
 
-        // 伤害
-        int damageX = headshotX + headshotWidth;
-        String damage = String.valueOf(Math.round(tabData.getDamage()));
-        guiGraphics.drawString(minecraft.font, damage,
-                damageX + (damageWidth - minecraft.font.width(damage)) / 2, textY, 0xFFFFFFFF);
+        dataX = drawCenteredCell(guiGraphics, String.valueOf(Math.round(tabData.getDamage())), dataX, COL_DAMAGE, textY);
 
-        // 得分
-        int scoreX = x + width - scoreWidth;
-        String score = String.valueOf(tabData.getScores());
-        guiGraphics.drawString(minecraft.font, score,
-                scoreX + (scoreWidth - minecraft.font.width(score)) / 2, textY, 0xFFFFFFFF);
+        // 得分（右对齐钉在行尾）
+        drawCenteredCell(guiGraphics, String.valueOf(tabData.getScores()), x + width - COL_SCORE, COL_SCORE, textY);
 
-        if(!tabData.isLiving()){
-            //渲染一层半透明灰色
+        if (!tabData.isLiving()) {
+            // 渲染一层半透明灰色
             guiGraphics.fill(x, y, x + width, y + height, 0x40000000);
         }
+    }
+
+    private int drawCenteredCell(GuiGraphics guiGraphics, String text, int x, int columnWidth, int textY) {
+        guiGraphics.drawString(minecraft.font, text,
+                x + (columnWidth - minecraft.font.width(text)) / 2, textY, 0xFFFFFFFF);
+        return x + columnWidth;
+    }
+
+    private static int scoresOf(Map<UUID, PlayerData> playerDataById, PlayerInfo info) {
+        PlayerData pd = playerDataById.get(info.getProfile().getId());
+        return pd == null ? 0 : pd.getScores();
     }
 }
