@@ -164,6 +164,9 @@ public class CSGameMap extends CSMap{
     private boolean isKnifeSelected = false;
     private boolean isOvertime = false;
     private int overCount = 0;
+    /** 加时赛启动时若正处于回合初始化流程内（startNewRound→cleanupMap），
+     *  推迟 startNewRound，由外层流程继续完成本回合启动，避免递归重复初始化。 */
+    private boolean deferringOvertimeRoundStart = false;
     private boolean isWaitingOverTimeVote = false;
     private boolean roundStarted = false;
     private WinnerReason lastWinnerReason = WinnerReason.ACED;
@@ -603,8 +606,12 @@ public class CSGameMap extends CSMap{
 
     @Override
     protected boolean shouldAdvanceRoundLifecycle() {
-        // 加时投票期间冻结回合推进，避免投票未出结果就开下一回合
-        return !checkPauseTime() && !checkWarmUpTime() && !isKnifeSelectingVote() && !isWaitingOverTimeVote;
+        // 注意：不能因 isWaitingOverTimeVote 冻结回合流——12-12 后必须让回合流继续，
+        // 由 cleanupMap → handleOvertimeAndTeamSwitch → handleNormalTimeLogic 触发
+        // startOvertimeSequence 按模式处理；否则 startOvertimeSequence 永远不会被调用，
+        // VOTE/AUTO/DISABLED 三种模式都会卡死在 12-12（此前的冻结机制 bug）。
+        // 递归防护由 overtimeTerminating 守卫承担。
+        return !checkPauseTime() && !checkWarmUpTime() && !isKnifeSelectingVote();
     }
 
     @Override
@@ -911,6 +918,11 @@ public class CSGameMap extends CSMap{
         if (!isOvertime) {
             if (getT().getScores() == targetForOvertime && getCT().getScores() == targetForOvertime) {
                 this.isWaitingOverTimeVote = true;
+                // 注意：不在此处就地处理各模式；由 cleanupMap → handleOvertimeAndTeamSwitch
+                // → handleNormalTimeLogic → startOvertimeSequence 统一按模式处理。
+                // startOvertimeSequence 会先置位 overtimeTerminating 守卫防递归，
+                // 且 shouldAdvanceRoundLifecycle 不再因 isWaitingOverTimeVote 冻结回合流，
+                // 否则 startOvertimeSequence 永远不会被触发（VOTE/AUTO/DISABLED 全部卡死）。
             }
         }
     }
@@ -1124,6 +1136,12 @@ public class CSGameMap extends CSMap{
             this.roundExplosiveDamage.clear();
             this.roundClutchCandidates.clear();
             this.cleanupMap();
+            // 加时结算（12-12 平局 / 加时段数达上限）可能在 cleanupMap 内触发 reset()：
+            // 此时 roundLifecycle 已被清空、isStart 已复位，必须中止本次回合启动，
+            // 否则会继续执行还原结构/开商店/重建回合，产生"幽灵回合"。
+            if (this.roundLifecycle == null || !this.isStart) {
+                return;
+            }
             this.sendRoundDamageMessage();
             this.getMapTeams().getJoinedPlayers().forEach((data -> data.getPlayer().ifPresentOrElse(player->{
                 player.removeAllEffects();
@@ -1275,7 +1293,10 @@ public class CSGameMap extends CSMap{
                         shop.resetPlayerData(true);
                     });
         });
-        this.startNewRound();
+        if (!this.deferringOvertimeRoundStart) {
+            this.startNewRound();
+        }
+        this.deferringOvertimeRoundStart = false;
     }
 
     public boolean cleanupMap() {
@@ -1332,6 +1353,11 @@ public class CSGameMap extends CSMap{
      * @return 是否需要切换队伍
      */
     private boolean handleOvertimeAndTeamSwitch(int ctScore, int tScore) {
+        // 守卫：加时结算（handleVictory + reset）进行中，reset() → cleanupMap() 会再次进入本方法，
+        // 若比分仍为 12-12 会无限递归（DISABLED 模式）。已置位则直接返回，不再触发。
+        if (overtimeTerminating) {
+            return false;
+        }
         currentPauseTime = 0;
 
         // 计算关键分数阈值
@@ -1384,11 +1410,18 @@ public class CSGameMap extends CSMap{
      * VOTE=发起加时投票；AUTO=直接进入加时；DISABLED=直接判平局。
      */
     private void startOvertimeSequence() {
+        // 加时结算开始：置位守卫，防止 reset() 重入 cleanupMap 再次触发本流程导致无限递归
+        overtimeTerminating = true;
         setBombEntity(null);
         currentRoundTime = 0;
         OvertimeMode mode = BOConfig.common.overtimeMode.get();
         switch (mode) {
-            case AUTO -> startOvertime();
+            case AUTO -> {
+                // 本方法通常由 cleanupMap→handleOvertimeAndTeamSwitch 调用，
+                // 外层 startNewRound 尚未完成，推迟回合启动避免递归重复初始化。
+                this.deferringOvertimeRoundStart = true;
+                startOvertime();
+            }
             case DISABLED -> {
                 handleVictory(null);
                 reset();
@@ -1419,6 +1452,8 @@ public class CSGameMap extends CSMap{
                 // 加时段数上限保护：达到上限则判平局结束，防止无限加时（0=无限）
                 int maxSegments = BOConfig.common.overtimeMaxSegments.get();
                 if (maxSegments > 0 && overCount >= maxSegments) {
+                    // 置位守卫：reset 会重入 cleanupMap 再次进入本方法，避免再次进入加时判定形成递归
+                    overtimeTerminating = true;
                     handleVictory(null);
                     reset();
                 }
@@ -1627,6 +1662,7 @@ public class CSGameMap extends CSMap{
         MapTeams mapTeams = this.getMapTeams();
         this.isOvertime = false;
         this.isWaitingOverTimeVote = false;
+        this.deferringOvertimeRoundStart = false;
         this.overCount = 0;
         this.isShopLocked = false;
         this.roundStarted = false;

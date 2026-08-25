@@ -114,6 +114,13 @@ public abstract class CSMap extends BaseRoundMap<String, CSRoundResultReason> {
 
     protected VoteObj voteObj;
 
+    /**
+     * 加时结算守卫：由 CSGameMap 的加时流程置位，reset() 完成后复位。
+     * 防止 DISABLED 模式下 12-12 平分触发 handleVictory→reset→cleanupMap→
+     * handleOvertimeAndTeamSwitch→再次 12-12→startOvertimeSequence 的无限递归（StackOverflowError）。
+     */
+    protected boolean overtimeTerminating = false;
+
     private final Map<UUID, ShopStateSnapshot> lastShopStates = new HashMap<>();
 
     private final CSSpectatorRosterSync spectatorRosterSync = new CSSpectatorRosterSync();
@@ -865,6 +872,8 @@ public abstract class CSMap extends BaseRoundMap<String, CSRoundResultReason> {
         })));
         this.teleportPlayerToMatchEndPoint();
         this.sendPacketToAllPlayer(new FPSMatchStatsResetS2CPacket());
+        // 加时结算流程完成：允许未来新比赛再次触发加时判定
+        this.overtimeTerminating = false;
     }
 
     @Override
