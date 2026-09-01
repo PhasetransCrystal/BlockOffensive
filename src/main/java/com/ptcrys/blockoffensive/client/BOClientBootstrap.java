@@ -13,7 +13,9 @@ import com.ptcrys.fpsmatch.common.client.spec.SpecKeyHandler;
 import com.ptcrys.fpsmatch.common.client.tab.TabManager;
 import com.ptcrys.blockoffensive.BlockOffensive;
 import com.ptcrys.blockoffensive.client.key.DismantleBombKey;
+import com.ptcrys.blockoffensive.client.key.MvpMusicKey;
 import com.ptcrys.blockoffensive.client.key.OpenShopKey;
+import com.ptcrys.blockoffensive.client.key.RadioKey;
 import net.minecraft.Optionull;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.PlayerInfo;
@@ -44,6 +46,8 @@ public class BOClientBootstrap {
         event.register(com.ptcrys.blockoffensive.client.key.TeamChatKey.TEAM_CHAT_KEY);
         event.register(com.ptcrys.blockoffensive.client.key.VoteKey.VOTE_AGREE_KEY);
         event.register(com.ptcrys.blockoffensive.client.key.VoteKey.VOTE_DISAGREE_KEY);
+        event.register(RadioKey.RADIO_TACTICAL_KEY);
+        event.register(MvpMusicKey.KEY_MVP_MUSIC);
         SpecKeyHandler.registerSwitchKey(SwitchSpectatorKey.KEY_SPECTATE_NEXT);
         SpecKeyHandler.registerSwitchKey(SwitchSpectatorKey.KEY_SPECTATE_PREV);
         // cs: hud | overlay | tab
@@ -104,6 +108,8 @@ public class BOClientBootstrap {
     @SubscribeEvent
     public static void onRegisterEntityRenderEvent(EntityRenderersEvent.RegisterRenderers event) {
         event.registerEntityRenderer(BOEntityRegister.C4.get(), new C4Renderer());
+        event.registerEntityRenderer(BOEntityRegister.PING_MARKER.get(),
+                com.ptcrys.blockoffensive.client.renderer.PingMarkerRenderer::new);
     }
 
     public static List<PlayerInfo> getPlayerInfos() {

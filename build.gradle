@@ -156,6 +156,11 @@ dependencies {
     modRuntimeOnly "dev.latvian.mods:rhino-forge:${rhino_version}"
     modRuntimeOnly "dev.architectury:architectury-forge:${architectury_version}"
 
+    implementation(jarJar("com.googlecode.soundlibs:jlayer:1.0.1.4"))
+    implementation(jarJar("com.googlecode.soundlibs:jorbis:0.0.17.4"))
+    implementation(jarJar("com.googlecode.soundlibs:vorbisspi:1.0.3.3"))
+    implementation(jarJar("com.googlecode.soundlibs:tritonus-share:0.3.7.4"))
+
 }
 
 // Generated resources and packaging

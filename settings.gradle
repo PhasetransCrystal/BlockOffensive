@@ -14,6 +14,11 @@ plugins {
 
 rootProject.name = 'BlockOffensive'
 
+//includeBuild('FPSMatch') {
+//    dependencySubstitution {
+//        substitute module('com.ptcrys:fpsmatch') using project(':')
+//    }
+//}
 includeBuild('FPSMatch') {
     dependencySubstitution {
         substitute module('com.ptcrys:fpsmatch') using project(':')
