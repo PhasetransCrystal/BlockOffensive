@@ -22,15 +22,17 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.UUID;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * 本地 MVP 音乐管理器（仅客户端）：
- * <ul>
- *   <li>音乐存放于 {@code .minecraft/config/blockoffensive/mvp_music/}，固定文件名 {@code mvp_music.ogg}；</li>
- *   <li>收到 MVP 事件时判断：本机玩家是 MVP → 播放本地音乐；其他玩家 MVP → 静默（不干扰 HUD 动画）；</li>
- *   <li>播放使用 MC 内置 OggAudioStream + OpenAL（不引入播放库）；</li>
- *   <li>安装：魔数检测真实格式 → 时长校验（&gt;15 秒拒绝）→ OGG 直拷 / MP3/WAV 转码 → 更新元数据 JSON。</li>
- * </ul>
+ *   音乐存放于 {@code .minecraft/config/blockoffensive/mvp_music/}，固定文件名 {@code mvp_music.ogg}；
+ *   收到 MVP 事件时判断：本机玩家是 MVP → 播放本地音乐；其他玩家 MVP → 静默（不干扰 HUD 动画）；
+ *   播放使用 MC 内置 OggAudioStream + OpenAL（不引入播放库）；
+ *   安装：魔数检测真实格式 → 时长校验（&gt;15 秒拒绝）→ OGG 直拷 / MP3/WAV 转码 → 更新元数据 JSON。
  */
 @OnlyIn(Dist.CLIENT)
 @Mod.EventBusSubscriber(value = Dist.CLIENT)
@@ -50,8 +52,35 @@ public final class MvpLocalMusicManager {
     private static MvpMusicData cachedData;
     /** 播放代次：每次 stop/新播放递增，用于让过期的 OpenAL 异步回调自行释放，防止 channel/buffer 错配泄漏。 */
     private static volatile long playGeneration = 0;
-    private static volatile net.minecraft.client.sounds.ChannelAccess.ChannelHandle playingChannel;
-    private static volatile SoundBuffer playingBuffer;
+    private static volatile PlaybackState currentPlayback;
+    private static final ThreadPoolExecutor AUDIO_EXECUTOR = new ThreadPoolExecutor(
+            1, 1, 30L, TimeUnit.SECONDS, new LinkedBlockingQueue<>(), runnable -> {
+        Thread thread = new Thread(runnable, "BlockOffensive-MvpMusic");
+        thread.setDaemon(true);
+        return thread;
+    });
+
+    private static final class PlaybackState {
+        private final long generation;
+        private final SoundBuffer buffer;
+        private final AtomicBoolean bufferReleased = new AtomicBoolean();
+        private volatile net.minecraft.client.sounds.ChannelAccess.ChannelHandle handle;
+        private volatile boolean canceled;
+
+        private PlaybackState(long generation, SoundBuffer buffer) {
+            this.generation = generation;
+            this.buffer = buffer;
+        }
+
+        private void releaseBuffer() {
+            if (bufferReleased.compareAndSet(false, true)) {
+                try {
+                    buffer.releaseAlBuffer();
+                } catch (Exception ignored) {
+                }
+            }
+        }
+    }
 
     private MvpLocalMusicManager() {
     }
@@ -136,15 +165,18 @@ public final class MvpLocalMusicManager {
             System.arraycopy(chunk, 0, all, offset, chunk.length);
             offset += chunk.length;
         }
-        try {
-            Files.createDirectories(MUSIC_DIR);
-            Path tmp = MUSIC_DIR.resolve("last_mvp_music.ogg");
-            Files.write(tmp, all);
-            playOggFile(tmp);
-            LOGGER.info("[MvpMusic] played MVP player {} exclusive music ({} bytes)", mvpId, all.length);
-        } catch (Exception e) {
-            LOGGER.error("[MvpMusic] failed to write received music", e);
-        }
+        byte[] received = all;
+        AUDIO_EXECUTOR.execute(() -> {
+            try {
+                Files.createDirectories(MUSIC_DIR);
+                Path tmp = Files.createTempFile(MUSIC_DIR, "received-", ".ogg");
+                Files.write(tmp, received);
+                Minecraft.getInstance().execute(() -> playOggFile(tmp));
+                LOGGER.info("[MvpMusic] received MVP player {} exclusive music ({} bytes)", mvpId, received.length);
+            } catch (Exception e) {
+                LOGGER.error("[MvpMusic] failed to write received music", e);
+            }
+        });
     }
 
     /** 将本地 mvp_music.ogg 分块上传到服务器（MVP 时全场播放本机专属音乐），并携带显示名称。 */
@@ -153,27 +185,30 @@ public final class MvpLocalMusicManager {
         if (mc.player == null || !Files.isRegularFile(MUSIC_FILE)) {
             return;
         }
+        UUID playerId = mc.player.getUUID();
         String displayName = getData() != null && getData().displayName() != null ? getData().displayName() : "";
-        displayName = normalizeDisplayName(displayName);
-        try {
-            byte[] data = Files.readAllBytes(MUSIC_FILE);
-            if (data.length == 0 || data.length > MvpMusicChunkS2CPacket.MAX_TOTAL_BYTES) {
-                return;
+        String uploadName = normalizeDisplayName(displayName);
+        AUDIO_EXECUTOR.execute(() -> {
+            try {
+                byte[] data = Files.readAllBytes(MUSIC_FILE);
+                if (data.length == 0 || data.length > MvpMusicChunkS2CPacket.MAX_TOTAL_BYTES) {
+                    return;
+                }
+                int chunkSize = MvpMusicChunkS2CPacket.MAX_CHUNK_BYTES;
+                int total = (data.length + chunkSize - 1) / chunkSize;
+                for (int i = 0; i < total; i++) {
+                    int from = i * chunkSize;
+                    int to = Math.min(data.length, from + chunkSize);
+                    byte[] chunk = java.util.Arrays.copyOfRange(data, from, to);
+                    com.ptcrys.blockoffensive.BlockOffensive.INSTANCE.sendToServer(
+                            new com.ptcrys.blockoffensive.net.mvp.MvpMusicUploadC2SPacket(
+                                    playerId, total, i, chunk, uploadName));
+                }
+                LOGGER.info("[MvpMusic] uploaded {} bytes in {} chunks (name='{}')", data.length, total, uploadName);
+            } catch (Exception e) {
+                LOGGER.error("[MvpMusic] upload failed", e);
             }
-            int chunkSize = MvpMusicChunkS2CPacket.MAX_CHUNK_BYTES;
-            int total = (data.length + chunkSize - 1) / chunkSize;
-            for (int i = 0; i < total; i++) {
-                int from = i * chunkSize;
-                int to = Math.min(data.length, from + chunkSize);
-                byte[] chunk = java.util.Arrays.copyOfRange(data, from, to);
-                com.ptcrys.blockoffensive.BlockOffensive.INSTANCE.sendToServer(
-                        new com.ptcrys.blockoffensive.net.mvp.MvpMusicUploadC2SPacket(
-                                mc.player.getUUID(), total, i, chunk, displayName));
-            }
-            LOGGER.info("[MvpMusic] uploaded {} bytes in {} chunks (name='{}')", data.length, total, displayName);
-        } catch (Exception e) {
-            LOGGER.error("[MvpMusic] upload failed", e);
-        }
+        });
     }
 
     /** 安装外部文件（本地转 OGG + 元数据）并上传服务器。返回 null 表示成功，否则错误消息。 */
@@ -195,48 +230,79 @@ public final class MvpLocalMusicManager {
 
     private static void playOggFile(Path file) {
         stop();
-        final long gen = ++playGeneration;
-        try (InputStream in = Files.newInputStream(file)) {
-            OggAudioStream ogg = new OggAudioStream(in);
-            ByteBuffer pcm = ogg.readAll(); // 一次性解码为 PCM
-            AudioFormat format = ogg.getFormat();
-            ogg.close();
+        final long generation = ++playGeneration;
+        final boolean temporaryFile = file.getFileName().toString().startsWith("received-");
+        AUDIO_EXECUTOR.execute(() -> {
+            try (InputStream in = Files.newInputStream(file);
+                 OggAudioStream ogg = new OggAudioStream(in)) {
+                ByteBuffer pcm = ogg.readAll();
+                AudioFormat format = ogg.getFormat();
+                Minecraft.getInstance().execute(() -> startPlayback(file, generation, pcm, format));
+            } catch (Exception e) {
+                LOGGER.error("[MvpMusic] failed to decode {}", file, e);
+            } finally {
+                if (temporaryFile) {
+                    try {
+                        Files.deleteIfExists(file);
+                    } catch (Exception e) {
+                        LOGGER.warn("[MvpMusic] failed to delete temporary file {}", file, e);
+                    }
+                }
+            }
+        });
+    }
 
-            SoundBuffer buffer = new SoundBuffer(pcm, format);
+    private static void startPlayback(Path file, long generation, ByteBuffer pcm, AudioFormat format) {
+        if (generation != playGeneration) {
+            return;
+        }
+        SoundBuffer buffer = new SoundBuffer(pcm, format);
+        PlaybackState state = new PlaybackState(generation, buffer);
+        currentPlayback = state;
+        try {
             net.minecraft.client.sounds.SoundEngine engine =
                     ((com.ptcrys.blockoffensive.mixin.client.SoundManagerAccessor)
                             (Object) Minecraft.getInstance().getSoundManager()).blockoffensive$getSoundEngine();
             net.minecraft.client.sounds.ChannelAccess channelAccess =
                     ((com.ptcrys.blockoffensive.mixin.client.SoundEngineChannelAccessor)
                             (Object) engine).blockoffensive$getChannelAccess();
-            // 通过 SoundEngine 的官方通道分配（异步回调）
             channelAccess.createHandle(com.mojang.blaze3d.audio.Library.Pool.STATIC).thenAccept(handle -> {
-                handle.execute(channel -> {
-                    // 音量挂到 MC 设置"音乐"分类（SoundSource.MUSIC）：玩家可在
-                    float vol = Minecraft.getInstance().options
-                            .getSoundSourceVolume(net.minecraft.sounds.SoundSource.MUSIC);
-                    channel.setVolume(vol);
-                    channel.attachStaticBuffer(buffer);
-                    channel.play();
-                });
-                if (gen != playGeneration) {
-                    // 已被更新的播放/stop 取代：立即释放本次资源，防止错配泄漏
+                state.handle = handle;
+                if (state.generation != playGeneration || state.canceled || currentPlayback != state) {
+                    state.releaseBuffer();
+                    handle.release();
+                    return;
+                }
+                try {
+                    handle.execute(channel -> {
+                        if (state.generation != playGeneration || state.canceled || currentPlayback != state) {
+                            channel.stop();
+                            state.releaseBuffer();
+                            return;
+                        }
+                        float volume = Minecraft.getInstance().options
+                                .getSoundSourceVolume(net.minecraft.sounds.SoundSource.MUSIC);
+                        channel.setVolume(volume);
+                        channel.attachStaticBuffer(buffer);
+                        channel.play();
+                    });
+                } catch (Exception e) {
+                    if (currentPlayback == state) {
+                        currentPlayback = null;
+                    }
+                    state.releaseBuffer();
                     try {
                         handle.release();
                     } catch (Exception ignored) {
                     }
-                    try {
-                        buffer.releaseAlBuffer();
-                    } catch (Exception ignored) {
-                    }
                     return;
                 }
-                playingChannel = handle;
-                playingBuffer = buffer;
                 LOGGER.info("[MvpMusic] playing {}", file.getFileName());
             });
         } catch (Exception e) {
-            LOGGER.error("[MvpMusic] failed to play {}", file.getFileName(), e);
+            currentPlayback = null;
+            state.releaseBuffer();
+            LOGGER.error("[MvpMusic] failed to start {}", file, e);
         }
     }
 
@@ -247,20 +313,29 @@ public final class MvpLocalMusicManager {
 
     /** 停止当前播放并释放资源。 */
     public static void stop() {
-        playGeneration++; // 使在途异步回调过期
-        if (playingChannel != null) {
-            try {
-                playingChannel.release();
-            } catch (Exception ignored) {
-            }
-            playingChannel = null;
+        playGeneration++;
+        PlaybackState state = currentPlayback;
+        currentPlayback = null;
+        if (state == null) {
+            return;
         }
-        if (playingBuffer != null) {
+        state.canceled = true;
+        net.minecraft.client.sounds.ChannelAccess.ChannelHandle handle = state.handle;
+        if (handle != null) {
             try {
-                playingBuffer.releaseAlBuffer();
+                handle.execute(channel -> {
+                    channel.stop();
+                    state.releaseBuffer();
+                });
+            } catch (Exception e) {
+                state.releaseBuffer();
+            }
+            try {
+                handle.release();
             } catch (Exception ignored) {
             }
-            playingBuffer = null;
+        } else {
+            state.releaseBuffer();
         }
     }
 
@@ -270,7 +345,8 @@ public final class MvpLocalMusicManager {
         if (event.phase != TickEvent.Phase.END) {
             return;
         }
-        if (playingChannel != null && playingChannel.isStopped()) {
+        PlaybackState playback = currentPlayback;
+        if (playback != null && playback.handle != null && playback.handle.isStopped()) {
             stop();
         }
         if (pendingMvpId != null && System.currentTimeMillis() - pendingMvpAt > PENDING_WINDOW_MS) {
@@ -306,10 +382,16 @@ public final class MvpLocalMusicManager {
     }
 
     public static void saveData(MvpMusicData data) {
-        cachedData = data;
         try {
             Files.createDirectories(MUSIC_DIR);
-            Files.writeString(META_FILE, GSON.toJson(data));
+            Path tmp = META_FILE.resolveSibling("mvp_music.json.tmp");
+            Files.writeString(tmp, GSON.toJson(data));
+            try {
+                Files.move(tmp, META_FILE, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+            } catch (java.nio.file.AtomicMoveNotSupportedException ignored) {
+                Files.move(tmp, META_FILE, StandardCopyOption.REPLACE_EXISTING);
+            }
+            cachedData = data;
         } catch (Exception e) {
             LOGGER.error("[MvpMusic] failed to write mvp_music.json", e);
         }
