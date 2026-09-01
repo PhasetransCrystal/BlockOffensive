@@ -29,14 +29,11 @@ import java.util.Map;
 
 /**
  * MVP 本地音乐的格式检测 / 时长解析 / 转码 / 元数据读取。
- * <p>
  * 魔数检测（不信任扩展名）：OGG=OggS、MP3=ID3 或 0xFFEx、WAV=RIFF+WAVE。
- * <ul>
- *   <li>MP3 解码：JLayer（javazoom.jl.*，手动解码为 PCM，不依赖会冲突的 mp3spi SPI）；</li>
- *   <li>WAV 解码：JDK 原生 JavaSound；</li>
- *   <li>OGG 编码：VorbisSPI（javazoom.spi.vorbis）+ JOrbis，经 AudioSystem.write 输出；</li>
- *   <li>元数据：MP3 手写解析 ID3v2（TIT2/TPE1）与 ID3v1；OGG 读 Vorbis Comments。</li>
- * </ul>
+ *   MP3 解码：JLayer（javazoom.jl.*，手动解码为 PCM，不依赖会冲突的 mp3spi SPI）；
+ *   WAV 解码：JDK 原生 JavaSound；
+ *   OGG 编码：VorbisSPI（javazoom.spi.vorbis）+ JOrbis，经 AudioSystem.write 输出；
+ *   元数据：MP3 手写解析 ID3v2（TIT2/TPE1）与 ID3v1；OGG 读 Vorbis Comments。
  * 所有操作在 JVM 内完成，不调用外部进程。
  */
 @OnlyIn(Dist.CLIENT)
