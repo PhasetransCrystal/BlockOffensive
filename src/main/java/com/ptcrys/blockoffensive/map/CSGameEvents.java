@@ -99,12 +99,11 @@ public class CSGameEvents {
                 return;
             }
 
-            cs.getMapTeams().getPlayerData(killer).ifPresent(data -> {
-                if (teammateKill) {
-                    data.addKill();
-                }
-                data.addScore(1);
-            });
+            // CS2 死斗计分：击杀 +100，爆头击杀额外 +50（合计 150）
+            // 注：TDM 友伤已在 HurtEvent 屏蔽、FFA 各玩家独立队伍，teammateKill 此处实际不可达
+            cs.getMapTeams().getPlayerData(killer).ifPresent(data ->
+                    data.addScore(event.isHeadshot() ? 150 : 100)
+            );
             return;
         }
 

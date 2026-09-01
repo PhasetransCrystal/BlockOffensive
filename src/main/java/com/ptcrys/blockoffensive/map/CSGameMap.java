@@ -357,6 +357,11 @@ public class CSGameMap extends CSMap{
     public void tick() {
         super.tick();
         if (isStart && roundLifecycle != null) {
+            // 暂停请求轮询覆盖 WAITING 与 ROUND_END_WAITING（含加时投票等冻结期），
+            // 原先仅在 onWaitingTick 轮询，冻结期（lifecycle 不 tick）请求会被静默丢弃
+            if (roundLifecycle.phase() != RoundPhase.ACTIVE_ROUND && !this.isPause) {
+                this.checkPauseVote();
+            }
             syncPauseTimeWithLifecycle();
         }
     }
@@ -634,7 +639,6 @@ public class CSGameMap extends CSMap{
         if (waitingTime.get() - elapsed <= 60 && elapsed % 20 == 0) {
             this.sendPacketToAllPlayer(new FPSMusicPlayS2CPacket(SoundEvents.NOTE_BLOCK_BELL.value().getLocation()));
         }
-        this.checkPauseVote();
     }
 
     @Override
@@ -765,6 +769,14 @@ public class CSGameMap extends CSMap{
         processRoundScoreAndOvertimeVote(winnerTeam);
 
         processEconomicRewards(winnerTeam, reason, mapTeams);
+
+        // 12-12 平局：经济结算后立即进入加时流程（VOTE=发起投票、AUTO=直接进加时、DISABLED=判平局）。
+        // 必须在经济发放之后调用，否则 startOvertime 的商店重置会清掉刚发的本回合奖励。
+        // 触发后 lifecycle 冻结于 ROUND_END_WAITING（isWaitingOverTimeVote），
+        // 由投票回调（startOvertime/reset）解除，从而避免下一回合在投票期间开打。
+        if (this.isWaitingOverTimeVote && !this.isOvertime) {
+            this.startOvertimeSequence();
+        }
     }
 
     /**
@@ -1676,6 +1688,12 @@ public class CSGameMap extends CSMap{
 
     @Override
     public int getClientTime(){
+        // 加时投票期间：HUD 显示投票剩余时间，避免倒计时冻结在上一回合结束画面
+        VoteObj overtimeVote = this.getVote();
+        if (this.isWaitingOverTimeVote && overtimeVote != null && overtimeVote.isOvertime()) {
+            return (int) overtimeVote.getRemainingTime() * 20;
+        }
+
         int time;
         if(this.isPause){
             time = pauseTime.get() - this.currentPauseTime;

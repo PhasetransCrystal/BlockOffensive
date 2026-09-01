@@ -51,6 +51,7 @@ legacyForge {
 
         gameTestServer {
             type = 'gameTestServer'
+            gameDirectory = project.file('build/run-gametest')
             systemProperty 'forge.enabledGameTestNamespaces', mod_id
         }
 
@@ -155,6 +156,7 @@ dependencies {
     modImplementation "dev.latvian.mods:kubejs-forge:${kubejs_version}"
     modRuntimeOnly "dev.latvian.mods:rhino-forge:${rhino_version}"
     modRuntimeOnly "dev.architectury:architectury-forge:${architectury_version}"
+    modRuntimeOnly "maven.modrinth:spark:1.10.53-forge"
 
 }
 
@@ -186,6 +188,15 @@ sourceSets.main.resources {
     srcDir generateModMetadata
 }
 legacyForge.ideSyncTask generateModMetadata
+
+def syncGameTestStructures = tasks.register('syncGameTestStructures', Sync) {
+    from "src/main/resources/data/${mod_id}/gameteststructures"
+    into layout.buildDirectory.dir('run-gametest/gameteststructures')
+}
+
+tasks.named('runGameTestServer') {
+    dependsOn syncGameTestStructures
+}
 
 tasks.named('jar', Jar) {
     manifest.attributes('MixinConfigs': "${mod_id}.mixins.json")

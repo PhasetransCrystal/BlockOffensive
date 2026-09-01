@@ -5,7 +5,6 @@ import com.ptcrys.blockoffensive.minimap.BlockOffensiveMinimapExtension;
 import com.ptcrys.blockoffensive.command.CSCommand;
 import com.ptcrys.blockoffensive.command.BOCommandRegister;
 import com.ptcrys.blockoffensive.compat.BOImpl;
-import com.ptcrys.blockoffensive.compat.BOMenuIntegration;
 import com.ptcrys.blockoffensive.compat.CSGrenadeCompat;
 import com.ptcrys.blockoffensive.compat.PhysicsModCompat;
 import com.ptcrys.blockoffensive.entity.BOEntityRegister;
@@ -138,17 +137,23 @@ public class BlockOffensive {
     @SubscribeEvent
     public void onEnqueue(final InterModEnqueueEvent event) {
         event.enqueueWork(()->{
-            if(FPSMImpl.findClothConfig()){
-                DistExecutor.safeRunWhenOn(Dist.CLIENT, () -> BOMenuIntegration::registerModsPage);
-            }else{
-                if (FMLEnvironment.dist == Dist.CLIENT) {
-                    try {
-                        Class<?> clothScreenClass = Class.forName("com.tacz.guns.client.gui.compat.ClothConfigScreen");
-                        clothScreenClass.getMethod("registerNoClothConfigPage").invoke(null);
-                    } catch (Exception ignored) {
-                        // TACZ 未加载，无需注册
-                    }
+            if (FMLEnvironment.dist != Dist.CLIENT) {
+                return;
+            }
+            try {
+                if (FPSMImpl.findClothConfig()) {
+                    Class<?> integration = Class.forName(
+                            "com.ptcrys.blockoffensive.compat.BOMenuIntegration"
+                    );
+                    integration.getMethod("registerModsPage").invoke(null);
+                } else {
+                    Class<?> clothScreenClass = Class.forName(
+                            "com.tacz.guns.client.gui.compat.ClothConfigScreen"
+                    );
+                    clothScreenClass.getMethod("registerNoClothConfigPage").invoke(null);
                 }
+            } catch (ReflectiveOperationException | LinkageError ignored) {
+                // Optional client configuration integration is unavailable.
             }
         });
     }

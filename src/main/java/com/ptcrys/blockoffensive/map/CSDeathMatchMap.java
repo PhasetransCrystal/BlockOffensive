@@ -120,7 +120,8 @@ public class CSDeathMatchMap extends CSMap {
     public void setup() {
         isTDM = this.addSetting(new DeathmatchModeSetting());
         matchTimeLimit = this.addSetting("match", "matchTimeLimit", 18000);
-        spawnProtectionTime = this.addSetting("player", "spawnProtectionTime", 10);
+        // 重生保护时长（秒）：参照 CS2 死斗约 3~5 秒
+        spawnProtectionTime = this.addSetting("player", "spawnProtectionTime", 5);
         // 死斗模式默认关闭敌方发光
         getEnemyGlowSetting().set(false);
     }
@@ -355,6 +356,11 @@ public class CSDeathMatchMap extends CSMap {
     }
 
     public void respawnPlayer(ServerPlayer player) {
+        // 对局未在进行（已结束/重置）时不重生，避免胜利结算瞬间死亡被传回出生点
+        if (!this.isStart) {
+            return;
+        }
+
         // 重置玩家状态
         player.heal(player.getMaxHealth());
         player.removeAllEffects();
@@ -369,8 +375,8 @@ public class CSDeathMatchMap extends CSMap {
         this.getMapTeams().getPlayerData(player).ifPresent(data -> data.setLiving(true));
         givePlayerKits(player);
         
-        // 给予重生保护
-        getDMPlayerData(player.getUUID()).ifPresent(DMPlayerData::respawn);
+        // 给予重生保护（以服务器游戏时间计时，跟随游戏节奏而非墙钟）
+        getDMPlayerData(player.getUUID()).ifPresent(d -> d.respawn(this.getServerLevel().getGameTime()));
     }
     
     public SpawnPointData getRandomSpawnPoint() {
@@ -524,10 +530,12 @@ public class CSDeathMatchMap extends CSMap {
 
     /**
      * 检查玩家是否处于重生保护状态
+     * 使用服务器游戏时间（tick）而非墙钟，避免服务器卡顿/暂停导致保护时长漂移
      */
     public boolean isInSpawnProtection(UUID uuid) {
         return this.getDMPlayerData(uuid)
-                .map(d -> d.isSpawning() && System.currentTimeMillis() - d.lastProtectionTime < spawnProtectionTime.get() * 1000L)
+                .map(d -> d.isSpawning()
+                        && this.getServerLevel().getGameTime() - d.lastProtectionTick < this.spawnProtectionTime.get() * 20L)
                 .orElse(false);
     }
     
@@ -823,7 +831,7 @@ public class CSDeathMatchMap extends CSMap {
     public static class DMPlayerData{
         UUID owner;
         boolean needRespawnProtection = false;
-        long lastProtectionTime = 0;
+        long lastProtectionTick = 0;
 
         boolean isMoved = false;
         boolean isFired = false;
@@ -850,13 +858,13 @@ public class CSDeathMatchMap extends CSMap {
             isFired = false;
             isMoved = false;
             needRespawnProtection = false;
-            lastProtectionTime = 0;
+            lastProtectionTick = 0;
         }
 
-        public void respawn(){
+        public void respawn(long gameTime){
             reset();
             needRespawnProtection = true;
-            lastProtectionTime = System.currentTimeMillis();
+            lastProtectionTick = gameTime;
         }
     }
 }
