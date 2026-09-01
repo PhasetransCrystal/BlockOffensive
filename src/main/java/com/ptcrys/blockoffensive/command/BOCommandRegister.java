@@ -33,7 +33,6 @@ public class BOCommandRegister {
 
     public static void onRegisterCommands(RegisterCommandsEvent event) {
         if (!FMLEnvironment.production) {
-            BOMinimapAcceptanceCommand.register(event.getDispatcher());
             BOTaczLiveFireDebugCommand.register(event.getDispatcher());
             BOPhysicsRagdollDebugCommand.register(event.getDispatcher());
             event.getDispatcher().register(Commands.literal("bo_debug_death_icons")

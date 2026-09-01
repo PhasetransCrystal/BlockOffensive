@@ -1,7 +1,5 @@
 package com.ptcrys.blockoffensive;
 
-import com.ptcrys.blockoffensive.minimap.BlockOffensiveMinimapExtension;
-
 import com.ptcrys.blockoffensive.command.CSCommand;
 import com.ptcrys.blockoffensive.command.BOCommandRegister;
 import com.ptcrys.blockoffensive.compat.BOImpl;
@@ -82,7 +80,6 @@ public class BlockOffensive {
 
     private void commonSetup(final FMLCommonSetupEvent event) {
 
-        BlockOffensiveMinimapExtension.register();
         BOPacketRegistration.register(PACKET_REGISTER);
 
         event.enqueueWork(() -> {

@@ -4,7 +4,6 @@ import com.mojang.blaze3d.systems.RenderSystem;
 import com.ptcrys.blockoffensive.client.data.CSClientData;
 import com.ptcrys.fpsmatch.common.client.FPSMClient;
 import com.ptcrys.fpsmatch.core.data.PlayerData;
-import com.ptcrys.blockoffensive.minimap.CSHudSafeAreaLayouts;
 import com.ptcrys.fpsmatch.util.RenderUtil;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;

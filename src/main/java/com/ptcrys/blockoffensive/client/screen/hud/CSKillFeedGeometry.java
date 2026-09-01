@@ -1,6 +1,4 @@
-package com.ptcrys.blockoffensive.minimap;
-
-import com.ptcrys.fpsmatch.core.minimap.hud.ScreenRect;
+package com.ptcrys.blockoffensive.client.screen.hud;
 
 /** Shared kill-feed row geometry and text-budget math. */
 public final class CSKillFeedGeometry {

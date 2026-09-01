@@ -1,6 +1,5 @@
 package com.ptcrys.blockoffensive.net;
 
-import com.ptcrys.blockoffensive.net.acceptance.*;
 import com.ptcrys.blockoffensive.net.bomb.BombActionC2SPacket;
 import com.ptcrys.blockoffensive.net.bomb.BombActionS2CPacket;
 import com.ptcrys.blockoffensive.net.bomb.BombDemolitionProgressS2CPacket;
@@ -86,17 +85,5 @@ public final class BOPacketRegistration {
                     : Direction.DEFAULT;
             registrar.register(legacy[discriminator], direction);
         }
-        registrar.register(
-                BOMinimapAcceptanceSceneS2CPacket.class,
-                Direction.PLAY_TO_CLIENT
-        );
-        registrar.register(
-                BOMinimapAcceptanceAckC2SPacket.class,
-                Direction.PLAY_TO_SERVER
-        );
-        registrar.register(
-                BOMinimapAcceptanceEditorContextC2SPacket.class,
-                Direction.PLAY_TO_SERVER
-        );
     }
 }

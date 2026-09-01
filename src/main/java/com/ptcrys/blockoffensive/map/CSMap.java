@@ -693,7 +693,7 @@ public abstract class CSMap extends BaseRoundMap<String, CSRoundResultReason> {
 
     /**
      * Force-drop C4 from a player inventory and retain the spawned ItemEntity identity
-     * for minimap objective tracking. Returns null when the player held no C4.
+     * for bomb-state handling. Returns null when the player held no C4.
      */
     @Nullable
     public static ItemEntity dropC4(ServerPlayer player) {

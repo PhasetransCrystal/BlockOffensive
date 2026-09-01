@@ -8,10 +8,8 @@ import com.ptcrys.blockoffensive.client.screen.hud.animation.KillAnimator;
 import com.ptcrys.blockoffensive.compat.BOImpl;
 import com.ptcrys.blockoffensive.compat.HitIndicationCompat;
 import com.ptcrys.blockoffensive.data.DeathMessage;
-import com.ptcrys.blockoffensive.minimap.CSHudSafeAreaLayouts;
 import com.ptcrys.fpsmatch.common.attributes.ammo.BulletproofArmorAttribute;
 import com.ptcrys.fpsmatch.common.client.FPSMClient;
-import com.ptcrys.fpsmatch.common.client.FPSMGameHudManager;
 import com.ptcrys.fpsmatch.common.client.screen.hud.IHudRenderer;
 import com.ptcrys.fpsmatch.compat.gun.GunCompatManager;
 import com.ptcrys.fpsmatch.util.RenderUtil;
@@ -67,7 +65,6 @@ public class CSGameHud implements IHudRenderer {
     private KillAnimator killAnimator = new EnderKillAnimator();
     private boolean isStarted = false;
     private volatile CSHudSafeAreaLayouts.HudGeometry frameGeometry;
-    private volatile long frameGeometrySequence = -1L;
     private Boolean lastSpectatorMode;
 
     /** Scoreboard overlay is drawn whenever CSGameHud is the active game HUD. */
@@ -79,13 +76,8 @@ public class CSGameHud implements IHudRenderer {
         return deathMessageHud;
     }
 
-    /** The render-time snapshot consumed later in the same HUD frame by minimap avoidance. */
     public CSHudSafeAreaLayouts.HudGeometry currentFrameGeometry() {
         return frameGeometry;
-    }
-
-    public long currentFrameGeometrySequence() {
-        return frameGeometrySequence;
     }
 
     public static CSGameHud getInstance(){
@@ -140,7 +132,6 @@ public class CSGameHud implements IHudRenderer {
         spectatorHudOverlay.reset();
         lastSpectatorMode = null;
         frameGeometry = null;
-        frameGeometrySequence = -1L;
     }
 
     private void syncSpectatorMode(boolean spectator) {
@@ -185,8 +176,6 @@ public class CSGameHud implements IHudRenderer {
                 !deathmatch && CSClientData.dismantleBombProgress > 0
         );
         frameGeometry = geometry;
-        frameGeometrySequence = FPSMGameHudManager.INSTANCE
-                .currentRenderFrameSequence();
         return geometry;
     }
 

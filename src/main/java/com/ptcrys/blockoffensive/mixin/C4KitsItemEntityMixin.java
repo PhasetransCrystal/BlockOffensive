@@ -87,18 +87,5 @@ public abstract class C4KitsItemEntityMixin {
         if (!self.isRemoved() && !this.getItem().isEmpty()) {
             return;
         }
-        FPSMCore.getInstance().getMapByPlayer(serverPlayer).ifPresent(map -> {
-            if (map instanceof CSGameMap gameMap) {
-                gameMap.objectiveTracker().successfulPickup(
-                        serverPlayer.getUUID(),
-                        serverPlayer.level().getGameTime(),
-                        serverPlayer.getX(),
-                        serverPlayer.getY(),
-                        serverPlayer.getZ(),
-                        serverPlayer.getYRot(),
-                        java.util.Optional.empty()
-                );
-            }
-        });
     }
 }

@@ -137,18 +137,6 @@ public class CSGameEvents {
         if(event.getMap() instanceof CSMap){
             ServerPlayer player = event.getPlayer();
             ItemEntity dropped = CSMap.dropC4(player);
-            if (dropped != null && event.getMap() instanceof CSGameMap gameMap) {
-                gameMap.objectiveTracker().carrierDisconnectedOrDied(
-                        dropped.getId(),
-                        dropped.getUUID(),
-                        player.level().getGameTime(),
-                        dropped.getX(),
-                        dropped.getY(),
-                        dropped.getZ(),
-                        dropped.getYRot(),
-                        java.util.Optional.empty()
-                );
-            }
             player.getInventory().clearContent();
             BulletproofArmorAttribute.removePlayer(player);
             event.setCanceled(true);
@@ -182,21 +170,6 @@ public class CSGameEvents {
                 event.getPlayer().getInventory().add(new ItemStack(BOItemRegister.BOMB_DISPOSAL_KIT.get(),1));
             }
 
-            if (!event.isCanceled()
-                    && itemStack.getItem() instanceof CompositionC4
-                    && cs instanceof CSGameMap gameMap) {
-                ItemEntity itemEntity = event.getItemEntity();
-                gameMap.objectiveTracker().manualDrop(
-                        itemEntity.getId(),
-                        itemEntity.getUUID(),
-                        player.level().getGameTime(),
-                        itemEntity.getX(),
-                        itemEntity.getY(),
-                        itemEntity.getZ(),
-                        itemEntity.getYRot(),
-                        java.util.Optional.empty()
-                );
-            }
 
             if(!event.isCanceled()){
                 FPSMUtil.sortPlayerInventory(player);
@@ -285,21 +258,6 @@ public class CSGameEvents {
 
     @SubscribeEvent
     public static void onPlacedC4(CSGameMapEvent.PlayerEvent.PlacedC4Event event) {
-        CompositionC4Entity c4 = event.getC4Entity();
-        if (c4 == null) {
-            return;
-        }
-        event.getMap().objectiveTracker().planted(
-                c4.getId(),
-                c4.getUUID(),
-                c4.level().getGameTime(),
-                c4.getX(),
-                c4.getY(),
-                c4.getZ(),
-                c4.getYRot(),
-                java.util.Optional.empty(),
-                java.util.Optional.empty()
-        );
     }
 
 }

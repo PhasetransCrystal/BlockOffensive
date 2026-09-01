@@ -2,7 +2,6 @@ package com.ptcrys.blockoffensive.client.screen.hud;
 
 import com.ptcrys.blockoffensive.net.vote.VoteSyncS2CPacket;
 import com.ptcrys.fpsmatch.common.client.screen.mapselect.FPSMGuiTheme;
-import com.ptcrys.fpsmatch.core.minimap.hud.ScreenRect;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;

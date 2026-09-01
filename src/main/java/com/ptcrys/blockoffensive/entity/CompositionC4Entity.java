@@ -149,7 +149,6 @@ public class CompositionC4Entity extends BlastBombEntity {
         forceC4Chunk(false);
         if (!this.level().isClientSide) {
             if(map != null){
-                map.objectiveTracker().removed(this.level().getGameTime());
                 map.setBombEntity(null);
             }
         }
@@ -218,13 +217,6 @@ public class CompositionC4Entity extends BlastBombEntity {
             }
 
             this.syncDemolitionProgress();
-            if (this.demolisher != null && this.map != null) {
-                this.map.objectiveTracker().updateDefuseProgress(
-                        this.demolisher.getUUID(),
-                        this.level().getGameTime(),
-                        this.getDemolitionProgress()
-                );
-            }
             if(demolitionProgress >= getTotalDemolitionProgress()){
                 if (demolisher instanceof ServerPlayer serverPlayer) {
                     map.recordBombDefused(serverPlayer);
@@ -233,18 +225,12 @@ public class CompositionC4Entity extends BlastBombEntity {
                 this.deleting = true;
                 this.demolitionProgress = 0;
                 this.playDefusedSound();
-                if (this.map != null) {
-                    this.map.objectiveTracker().defused(this.level().getGameTime());
-                }
                 return;
             }
 
             if (i <= 0) {
                 if (!this.level().isClientSide) {
                     this.state = BlastBombState.EXPLODED;
-                    if (this.map != null) {
-                        this.map.objectiveTracker().exploded(this.level().getGameTime());
-                    }
                     this.explode();
                 }
             }
@@ -374,13 +360,6 @@ public class CompositionC4Entity extends BlastBombEntity {
             if (player != null && checkDemolisher(player)) {
                 this.playDefusingSound();
                 this.demolisher = player;
-                if (this.map != null) {
-                    this.map.objectiveTracker().startDefusing(
-                            player.getUUID(),
-                            this.level().getGameTime(),
-                            this.getDemolitionProgress()
-                    );
-                }
                 map.getMapTeams().getTeamByPlayer(player).ifPresent(team->{
                     team.sendMessage(BOUtil.buildTeamChatMessage(player,team, Component.translatable("blockoffensive.demolish.message.c4"),Component.empty(), TextColor.parseColor(team.name.equals("ct") ? "#96C8FA" : "#EAC055")));
                 });
@@ -390,9 +369,6 @@ public class CompositionC4Entity extends BlastBombEntity {
 
     public void resetDemolisher(){
         this.demolisher = null;
-        if (this.map != null && !this.level().isClientSide) {
-            this.map.objectiveTracker().cancelDefuse(this.level().getGameTime());
-        }
     }
 
     public AABB getR(){
