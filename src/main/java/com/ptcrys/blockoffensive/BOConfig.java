@@ -58,6 +58,9 @@ public class BOConfig {
         public final ForgeConfigSpec.DoubleValue enemyStepVolume;
 
         public final ForgeConfigSpec.IntValue fuseTime;
+        // Ping 标记
+        public final ForgeConfigSpec.IntValue pingTtlSeconds;
+        public final ForgeConfigSpec.DoubleValue pingMaxDistance;
         // 新增的游戏规则配置项
         public final ForgeConfigSpec.BooleanValue keepInventory;
         public final ForgeConfigSpec.BooleanValue immediateRespawn;
@@ -93,6 +96,20 @@ public class BOConfig {
             builder.push("c4");
             {
                 fuseTime = builder.comment("Fuse Time").defineInRange("Fuse Time", 800, 1, 3200);
+            }
+            builder.pop();
+
+            builder.push("ping");
+            {
+                pingTtlSeconds = builder.comment(
+                        "队友 Ping 标记存活时长（秒），到期自动消失",
+                        "Teammate ping marker lifetime in seconds; expires automatically"
+                ).defineInRange("pingTtlSeconds", 6, 3, 30);
+
+                pingMaxDistance = builder.comment(
+                        "Ping 标记最大显示距离（格），更远不渲染",
+                        "Max ping marker render distance in blocks"
+                ).defineInRange("pingMaxDistance", 256.0D, 16.0D, 1024.0D);
             }
             builder.pop();
 

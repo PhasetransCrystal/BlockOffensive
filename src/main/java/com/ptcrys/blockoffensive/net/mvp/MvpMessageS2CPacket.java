@@ -43,7 +43,11 @@ public class MvpMessageS2CPacket {
     }
 
     public void handle(Supplier<NetworkEvent.Context> ctx) {
-        ctx.get().enqueueWork(()-> CSGameHud.getInstance().getMvpHud().triggerAnimation(this.mvpReason));
+        ctx.get().enqueueWork(() -> {
+            CSGameHud.getInstance().getMvpHud().triggerAnimation(this.mvpReason);
+            // 本地 MVP 音乐：本机玩家是 MVP 时播放本地 mvp_music.ogg；其他玩家 MVP 时静默
+            com.ptcrys.blockoffensive.client.mvp.MvpLocalMusicManager.onMvpEvent(this.mvpReason);
+        });
         ctx.get().setPacketHandled(true);
     }
 }

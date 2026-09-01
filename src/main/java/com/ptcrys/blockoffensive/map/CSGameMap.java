@@ -23,6 +23,8 @@ import com.ptcrys.blockoffensive.net.PxRagdollRemovalCompatS2CPacket;
 import com.ptcrys.blockoffensive.net.bomb.BombDemolitionProgressS2CPacket;
 import com.ptcrys.blockoffensive.net.mvp.MvpHUDCloseS2CPacket;
 import com.ptcrys.blockoffensive.net.mvp.MvpMessageS2CPacket;
+import com.ptcrys.blockoffensive.net.mvp.MvpMusicChunkS2CPacket;
+import com.ptcrys.blockoffensive.server.mvp.MvpMusicServerStore;
 import com.ptcrys.blockoffensive.net.shop.ShopStatesS2CPacket;
 import com.ptcrys.blockoffensive.net.spec.BombFuseS2CPacket;
 import com.ptcrys.blockoffensive.sound.BOSoundRegister;
@@ -176,6 +178,11 @@ public class CSGameMap extends CSMap{
     private final Map<UUID, Float> roundExplosiveDamage = new HashMap<>();
     /** Players who became sole living teammate while facing 2+ living enemies this round. */
     private final Set<UUID> roundClutchCandidates = new HashSet<>();
+
+    /** 队友 Ping 标记实体映射（玩家 → 实体 id），再次 Ping 时移除旧标记。 */
+    private final Map<UUID, Integer> pingEntities = new HashMap<>();
+    /** 每玩家上次 Ping 时间（tick），用于频率限制。 */
+    private final Map<UUID, Long> lastPingTick = new HashMap<>();
 
     /**
      * 构造函数：创建CS地图实例
@@ -1080,6 +1087,10 @@ public class CSGameMap extends CSMap{
     }
 
     private String getMvpMusicName(UUID uuid) {
+        String uploadedName = MvpMusicServerStore.getName(uuid);
+        if (MvpMusicServerStore.hasMusic(uuid) && uploadedName != null) {
+            return uploadedName;
+        }
         if (!MVPMusicManager.getInstance().playerHasMvpMusic(uuid.toString())) {
             return MvpMusicManager.getDefaultMvpMusicName();
         }
@@ -1090,6 +1101,24 @@ public class CSGameMap extends CSMap{
         if (mvpReason.uuid == null) {
             return;
         }
+
+        byte[] uploadedMusic = MvpMusicServerStore.readAll(mvpReason.uuid);
+        if (uploadedMusic != null) {
+            int totalChunks = (uploadedMusic.length + MvpMusicServerStore.MAX_CHUNK_BYTES - 1)
+                    / MvpMusicServerStore.MAX_CHUNK_BYTES;
+            if (totalChunks <= MvpMusicServerStore.MAX_CHUNKS) {
+                for (int chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
+                    int from = chunkIndex * MvpMusicServerStore.MAX_CHUNK_BYTES;
+                    int to = Math.min(uploadedMusic.length,
+                            from + MvpMusicServerStore.MAX_CHUNK_BYTES);
+                    sendPacketToAllPlayer(new MvpMusicChunkS2CPacket(
+                            mvpReason.uuid, totalChunks, chunkIndex,
+                            Arrays.copyOfRange(uploadedMusic, from, to)));
+                }
+                return;
+            }
+        }
+
         ResourceLocation music;
         if (MVPMusicManager.getInstance().playerHasMvpMusic(mvpReason.uuid.toString())) {
             music = MVPMusicManager.getInstance().getMvpMusic(mvpReason.uuid.toString());
@@ -1744,6 +1773,67 @@ public class CSGameMap extends CSMap{
 
     public CSGameObjectiveTracker objectiveTracker() {
         return objectiveTracker;
+    }
+
+    /**
+     * 客户端 → 服务端：准星 Ping。校验后在图中生成同队可见的标记实体并广播给同队玩家。
+     */
+    public void handlePing(ServerPlayer sender, int type, double x, double y, double z) {
+        if (!isStart || sender == null) {
+            return;
+        }
+        // 类型和坐标先校验，非法请求不应消耗合法 Ping 的频率配额。
+        if (type < 0 || type > 5
+                || !Double.isFinite(x) || !Double.isFinite(y) || !Double.isFinite(z)) {
+            return;
+        }
+        // 限制 Ping 位置在合理范围内（世界坐标），防止伪造包乱标。
+        double range = 4096.0D;
+        double maxDistance = BOConfig.common.pingMaxDistance.get();
+        if (Math.abs(x) > range || Math.abs(y) > range || Math.abs(z) > range
+                || sender.distanceToSqr(x, y, z) > maxDistance * maxDistance) {
+            return;
+        }
+
+        // 频率限制：每玩家至少 1 秒一次，防刷屏。
+        long nowTick = sender.serverLevel().getGameTime();
+        Long last = lastPingTick.get(sender.getUUID());
+        if (last != null && nowTick - last < 20) {
+            return;
+        }
+        lastPingTick.put(sender.getUUID(), nowTick);
+        if (!(sender.level() instanceof net.minecraft.server.level.ServerLevel serverLevel)) {
+            return;
+        }
+
+        // 同一玩家再次 Ping：旧标记消失，只保留新标记
+        Integer oldId = pingEntities.remove(sender.getUUID());
+        if (oldId != null) {
+            net.minecraft.world.entity.Entity old = serverLevel.getEntity(oldId);
+            if (old != null && !old.isRemoved()) {
+                old.discard();
+            }
+        }
+
+        com.ptcrys.blockoffensive.entity.PingMarkerEntity marker =
+                new com.ptcrys.blockoffensive.entity.PingMarkerEntity(serverLevel, sender.getUUID(), type);
+        marker.setPos(x, y, z);
+        serverLevel.addFreshEntity(marker);
+        pingEntities.put(sender.getUUID(), marker.getId());
+        FPSMatch.LOGGER.info("[BO PingSrv] spawned marker id={} owner={} type={} pos=({},{},{})",
+                marker.getId(), sender.getUUID(), type,
+                String.format(java.util.Locale.ROOT, "%.2f", x),
+                String.format(java.util.Locale.ROOT, "%.2f", y),
+                String.format(java.util.Locale.ROOT, "%.2f", z));
+
+        // 广播给同队玩家（客户端渲染屏幕标记/光柱）
+        com.ptcrys.blockoffensive.net.ping.PingS2CPacket packet =
+                new com.ptcrys.blockoffensive.net.ping.PingS2CPacket(
+                        sender.getGameProfile().getName(), type, x, y, z);
+        this.getMapTeams().getTeamByPlayer(sender).ifPresent(team ->
+                team.getOnlinePlayers().forEach(uuid -> this.getPlayerByUUID(uuid)
+                        .ifPresent(p -> FPSMatch.sendToPlayer(p, packet)))
+        );
     }
 
     @Override

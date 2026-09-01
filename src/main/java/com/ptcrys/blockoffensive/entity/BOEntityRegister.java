@@ -12,4 +12,9 @@ public class BOEntityRegister {
     public static final RegistryObject<EntityType<CompositionC4Entity>> C4 =
             ENTITY_TYPES.register("c4", () -> EntityType.Builder.<CompositionC4Entity>of(CompositionC4Entity::new, MobCategory.MISC)
                     .sized(0.25f, 0.25f).build("c4"));
+
+    /** 队友 Ping 标记实体（世界内光柱）。 */
+    public static final RegistryObject<EntityType<PingMarkerEntity>> PING_MARKER =
+            ENTITY_TYPES.register("ping_marker", () -> EntityType.Builder.<PingMarkerEntity>of(PingMarkerEntity::new, MobCategory.MISC)
+                    .sized(0.01f, 0.01f).noSummon().noSave().build("ping_marker"));
 }
