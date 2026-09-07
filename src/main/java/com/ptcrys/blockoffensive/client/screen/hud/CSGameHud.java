@@ -226,6 +226,7 @@ public class CSGameHud implements IHudRenderer {
         renderInfoLine(mc, gui, guiGraphics, bottomHud.combatInfo());
         renderItemBar(mc, gui, guiGraphics, bottomHud.itemBar());
         mvpHud.render(guiGraphics, screenWidth, screenHeight);
+        PingScreenMarker.render(guiGraphics, screenWidth, screenHeight);
         geometry.topStatus().vote().ifPresent(rect -> CSVoteHud.getInstance().render(guiGraphics, rect));
     }
 

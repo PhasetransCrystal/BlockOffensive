@@ -296,5 +296,22 @@
   "blockoffensive.mvp.explosive_damage": "Most explosive damage",
   "blockoffensive.mvp.info.incendiary_damage": "%1$s earned round MVP with the most fire damage",
   "blockoffensive.mvp.info.explosive_damage": "%1$s earned round MVP with the most explosive damage",
-  "blockoffensive.mvp.info.survive_under_fire": "%1$s clutched the round and earned MVP"
+  "blockoffensive.mvp.info.survive_under_fire": "%1$s clutched the round and earned MVP",
+  "key.blockoffensive.radio_tactical.desc": "Open ping radial menu",
+  "blockoffensive.ping.menu.title": "Ping Menu",
+  "blockoffensive.ping.option.normal": "Ping",
+  "blockoffensive.ping.option.enemy": "Enemy",
+  "blockoffensive.ping.option.danger": "Danger",
+  "blockoffensive.ping.option.attack": "Attack",
+  "blockoffensive.ping.option.defend": "Defend",
+  "blockoffensive.ping.option.help": "Help",
+  "blockoffensive.ping.fail": "Cannot ping: aim at a block or entity",
+  "key.blockoffensive.mvp_music.desc": "MVP Music Settings",
+  "blockoffensive.mvp_music.title": "MVP Local Music Settings",
+  "blockoffensive.mvp_music.select": "Select Music File",
+  "blockoffensive.mvp_music.dir": "Choose from Music Folder…",
+  "blockoffensive.mvp_music.dir_title": "Select File in Music Folder",
+  "blockoffensive.mvp_music.preview": "Preview",
+  "blockoffensive.mvp_music.save": "Save",
+  "blockoffensive.mvp_music.name": "Display Name"
 }

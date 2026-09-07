@@ -296,5 +296,22 @@
   "blockoffensive.mvp.explosive_damage": "爆炸伤害最高",
   "blockoffensive.mvp.info.incendiary_damage": "%1$s 凭借最高燃烧伤害成为本回合 MVP",
   "blockoffensive.mvp.info.explosive_damage": "%1$s 凭借最高爆炸伤害成为本回合 MVP",
-  "blockoffensive.mvp.info.survive_under_fire": "%1$s 残局存活并成为本回合 MVP"
+  "blockoffensive.mvp.info.survive_under_fire": "%1$s 残局存活并成为本回合 MVP",
+  "key.blockoffensive.radio_tactical.desc": "打开标记轮盘 (Ping)",
+  "blockoffensive.ping.menu.title": "标记轮盘",
+  "blockoffensive.ping.option.normal": "标记",
+  "blockoffensive.ping.option.enemy": "敌人",
+  "blockoffensive.ping.option.danger": "危险",
+  "blockoffensive.ping.option.attack": "进攻",
+  "blockoffensive.ping.option.defend": "防守",
+  "blockoffensive.ping.option.help": "支援",
+  "blockoffensive.ping.fail": "无法标点：准星未指向任何方块或实体",
+  "key.blockoffensive.mvp_music.desc": "MVP 音乐设置",
+  "blockoffensive.mvp_music.title": "MVP 本地音乐设置",
+  "blockoffensive.mvp_music.select": "选择音乐文件",
+  "blockoffensive.mvp_music.dir": "从音乐目录选择…",
+  "blockoffensive.mvp_music.dir_title": "选择音乐目录中的文件",
+  "blockoffensive.mvp_music.preview": "试听",
+  "blockoffensive.mvp_music.save": "保存",
+  "blockoffensive.mvp_music.name": "显示名称"
 }

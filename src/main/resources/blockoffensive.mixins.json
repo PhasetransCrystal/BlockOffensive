@@ -14,7 +14,9 @@
   ],
   "client": [
     "client.PlayerRendererMixin",
-    "client.C4ItemOutlineMixin"
+    "client.C4ItemOutlineMixin",
+    "client.SoundEngineChannelAccessor",
+    "client.SoundManagerAccessor"
   ],
   "injectors": {
     "defaultRequire": 1

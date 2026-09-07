@@ -23,6 +23,8 @@ import com.ptcrys.blockoffensive.net.PxRagdollRemovalCompatS2CPacket;
 import com.ptcrys.blockoffensive.net.bomb.BombDemolitionProgressS2CPacket;
 import com.ptcrys.blockoffensive.net.mvp.MvpHUDCloseS2CPacket;
 import com.ptcrys.blockoffensive.net.mvp.MvpMessageS2CPacket;
+import com.ptcrys.blockoffensive.net.mvp.MvpMusicChunkS2CPacket;
+import com.ptcrys.blockoffensive.server.mvp.MvpMusicServerStore;
 import com.ptcrys.blockoffensive.net.shop.ShopStatesS2CPacket;
 import com.ptcrys.blockoffensive.net.spec.BombFuseS2CPacket;
 import com.ptcrys.blockoffensive.sound.BOSoundRegister;
@@ -157,6 +159,9 @@ public class CSGameMap extends CSMap{
     private boolean isKnifeSelected = false;
     private boolean isOvertime = false;
     private int overCount = 0;
+    /** 加时赛启动时若正处于回合初始化流程内（startNewRound→cleanupMap），
+     *  推迟 startNewRound，由外层流程继续完成本回合启动，避免递归重复初始化。 */
+    private boolean deferringOvertimeRoundStart = false;
     private boolean isWaitingOverTimeVote = false;
     private boolean roundStarted = false;
     private WinnerReason lastWinnerReason = WinnerReason.ACED;
@@ -169,6 +174,11 @@ public class CSGameMap extends CSMap{
     private final Map<UUID, Float> roundExplosiveDamage = new HashMap<>();
     /** Players who became sole living teammate while facing 2+ living enemies this round. */
     private final Set<UUID> roundClutchCandidates = new HashSet<>();
+
+    /** 队友 Ping 标记实体映射（玩家 → 实体 id），再次 Ping 时移除旧标记。 */
+    private final Map<UUID, Integer> pingEntities = new HashMap<>();
+    /** 每玩家上次 Ping 时间（tick），用于频率限制。 */
+    private final Map<UUID, Long> lastPingTick = new HashMap<>();
 
     /**
      * 构造函数：创建CS地图实例
@@ -601,8 +611,12 @@ public class CSGameMap extends CSMap{
 
     @Override
     protected boolean shouldAdvanceRoundLifecycle() {
-        // 加时投票期间冻结回合推进，避免投票未出结果就开下一回合
-        return !checkPauseTime() && !checkWarmUpTime() && !isKnifeSelectingVote() && !isWaitingOverTimeVote;
+        // 注意：不能因 isWaitingOverTimeVote 冻结回合流——12-12 后必须让回合流继续，
+        // 由 cleanupMap → handleOvertimeAndTeamSwitch → handleNormalTimeLogic 触发
+        // startOvertimeSequence 按模式处理；否则 startOvertimeSequence 永远不会被调用，
+        // VOTE/AUTO/DISABLED 三种模式都会卡死在 12-12（此前的冻结机制 bug）。
+        // 递归防护由 overtimeTerminating 守卫承担。
+        return !checkPauseTime() && !checkWarmUpTime() && !isKnifeSelectingVote();
     }
 
     @Override
@@ -916,6 +930,11 @@ public class CSGameMap extends CSMap{
         if (!isOvertime) {
             if (getT().getScores() == targetForOvertime && getCT().getScores() == targetForOvertime) {
                 this.isWaitingOverTimeVote = true;
+                // 注意：不在此处就地处理各模式；由 cleanupMap → handleOvertimeAndTeamSwitch
+                // → handleNormalTimeLogic → startOvertimeSequence 统一按模式处理。
+                // startOvertimeSequence 会先置位 overtimeTerminating 守卫防递归，
+                // 且 shouldAdvanceRoundLifecycle 不再因 isWaitingOverTimeVote 冻结回合流，
+                // 否则 startOvertimeSequence 永远不会被触发（VOTE/AUTO/DISABLED 全部卡死）。
             }
         }
     }
@@ -1085,6 +1104,10 @@ public class CSGameMap extends CSMap{
     }
 
     private String getMvpMusicName(UUID uuid) {
+        String uploadedName = MvpMusicServerStore.getName(uuid);
+        if (MvpMusicServerStore.hasMusic(uuid) && uploadedName != null) {
+            return uploadedName;
+        }
         if (!MVPMusicManager.getInstance().playerHasMvpMusic(uuid.toString())) {
             return MvpMusicManager.getDefaultMvpMusicName();
         }
@@ -1095,6 +1118,24 @@ public class CSGameMap extends CSMap{
         if (mvpReason.uuid == null) {
             return;
         }
+
+        byte[] uploadedMusic = MvpMusicServerStore.readAll(mvpReason.uuid);
+        if (uploadedMusic != null) {
+            int totalChunks = (uploadedMusic.length + MvpMusicServerStore.MAX_CHUNK_BYTES - 1)
+                    / MvpMusicServerStore.MAX_CHUNK_BYTES;
+            if (totalChunks <= MvpMusicServerStore.MAX_CHUNKS) {
+                for (int chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
+                    int from = chunkIndex * MvpMusicServerStore.MAX_CHUNK_BYTES;
+                    int to = Math.min(uploadedMusic.length,
+                            from + MvpMusicServerStore.MAX_CHUNK_BYTES);
+                    sendPacketToAllPlayer(new MvpMusicChunkS2CPacket(
+                            mvpReason.uuid, totalChunks, chunkIndex,
+                            Arrays.copyOfRange(uploadedMusic, from, to)));
+                }
+                return;
+            }
+        }
+
         ResourceLocation music;
         if (MVPMusicManager.getInstance().playerHasMvpMusic(mvpReason.uuid.toString())) {
             music = MVPMusicManager.getInstance().getMvpMusic(mvpReason.uuid.toString());
@@ -1129,6 +1170,12 @@ public class CSGameMap extends CSMap{
             this.roundExplosiveDamage.clear();
             this.roundClutchCandidates.clear();
             this.cleanupMap();
+            // 加时结算（12-12 平局 / 加时段数达上限）可能在 cleanupMap 内触发 reset()：
+            // 此时 roundLifecycle 已被清空、isStart 已复位，必须中止本次回合启动，
+            // 否则会继续执行还原结构/开商店/重建回合，产生"幽灵回合"。
+            if (this.roundLifecycle == null || !this.isStart) {
+                return;
+            }
             this.sendRoundDamageMessage();
             this.getMapTeams().getJoinedPlayers().forEach((data -> data.getPlayer().ifPresentOrElse(player->{
                 player.removeAllEffects();
@@ -1280,7 +1327,10 @@ public class CSGameMap extends CSMap{
                         shop.resetPlayerData(true);
                     });
         });
-        this.startNewRound();
+        if (!this.deferringOvertimeRoundStart) {
+            this.startNewRound();
+        }
+        this.deferringOvertimeRoundStart = false;
     }
 
     public boolean cleanupMap() {
@@ -1336,6 +1386,11 @@ public class CSGameMap extends CSMap{
      * @return 是否需要切换队伍
      */
     private boolean handleOvertimeAndTeamSwitch(int ctScore, int tScore) {
+        // 守卫：加时结算（handleVictory + reset）进行中，reset() → cleanupMap() 会再次进入本方法，
+        // 若比分仍为 12-12 会无限递归（DISABLED 模式）。已置位则直接返回，不再触发。
+        if (overtimeTerminating) {
+            return false;
+        }
         currentPauseTime = 0;
 
         // 计算关键分数阈值
@@ -1388,11 +1443,18 @@ public class CSGameMap extends CSMap{
      * VOTE=发起加时投票；AUTO=直接进入加时；DISABLED=直接判平局。
      */
     private void startOvertimeSequence() {
+        // 加时结算开始：置位守卫，防止 reset() 重入 cleanupMap 再次触发本流程导致无限递归
+        overtimeTerminating = true;
         setBombEntity(null);
         currentRoundTime = 0;
         OvertimeMode mode = BOConfig.common.overtimeMode.get();
         switch (mode) {
-            case AUTO -> startOvertime();
+            case AUTO -> {
+                // 本方法通常由 cleanupMap→handleOvertimeAndTeamSwitch 调用，
+                // 外层 startNewRound 尚未完成，推迟回合启动避免递归重复初始化。
+                this.deferringOvertimeRoundStart = true;
+                startOvertime();
+            }
             case DISABLED -> {
                 handleVictory(null);
                 reset();
@@ -1423,6 +1485,8 @@ public class CSGameMap extends CSMap{
                 // 加时段数上限保护：达到上限则判平局结束，防止无限加时（0=无限）
                 int maxSegments = BOConfig.common.overtimeMaxSegments.get();
                 if (maxSegments > 0 && overCount >= maxSegments) {
+                    // 置位守卫：reset 会重入 cleanupMap 再次进入本方法，避免再次进入加时判定形成递归
+                    overtimeTerminating = true;
                     handleVictory(null);
                     reset();
                 }
@@ -1622,6 +1686,7 @@ public class CSGameMap extends CSMap{
         MapTeams mapTeams = this.getMapTeams();
         this.isOvertime = false;
         this.isWaitingOverTimeVote = false;
+        this.deferringOvertimeRoundStart = false;
         this.overCount = 0;
         this.isShopLocked = false;
         this.roundStarted = false;
@@ -1737,6 +1802,67 @@ public class CSGameMap extends CSMap{
     @Override
     protected boolean shouldSendPhysicsDeathPacketInBaseDeathHandler(DeathContext context) {
         return !this.isStart || this.getMapTeams().getTeamByPlayer(context.getDeadPlayer()).isEmpty();
+    }
+
+    /**
+     * 客户端 → 服务端：准星 Ping。校验后在图中生成同队可见的标记实体并广播给同队玩家。
+     */
+    public void handlePing(ServerPlayer sender, int type, double x, double y, double z) {
+        if (!isStart || sender == null) {
+            return;
+        }
+        // 类型和坐标先校验，非法请求不应消耗合法 Ping 的频率配额。
+        if (type < 0 || type > 5
+                || !Double.isFinite(x) || !Double.isFinite(y) || !Double.isFinite(z)) {
+            return;
+        }
+        // 限制 Ping 位置在合理范围内（世界坐标），防止伪造包乱标。
+        double range = 4096.0D;
+        double maxDistance = BOConfig.common.pingMaxDistance.get();
+        if (Math.abs(x) > range || Math.abs(y) > range || Math.abs(z) > range
+                || sender.distanceToSqr(x, y, z) > maxDistance * maxDistance) {
+            return;
+        }
+
+        // 频率限制：每玩家至少 1 秒一次，防刷屏。
+        long nowTick = sender.serverLevel().getGameTime();
+        Long last = lastPingTick.get(sender.getUUID());
+        if (last != null && nowTick - last < 20) {
+            return;
+        }
+        lastPingTick.put(sender.getUUID(), nowTick);
+        if (!(sender.level() instanceof net.minecraft.server.level.ServerLevel serverLevel)) {
+            return;
+        }
+
+        // 同一玩家再次 Ping：旧标记消失，只保留新标记
+        Integer oldId = pingEntities.remove(sender.getUUID());
+        if (oldId != null) {
+            net.minecraft.world.entity.Entity old = serverLevel.getEntity(oldId);
+            if (old != null && !old.isRemoved()) {
+                old.discard();
+            }
+        }
+
+        com.ptcrys.blockoffensive.entity.PingMarkerEntity marker =
+                new com.ptcrys.blockoffensive.entity.PingMarkerEntity(serverLevel, sender.getUUID(), type);
+        marker.setPos(x, y, z);
+        serverLevel.addFreshEntity(marker);
+        pingEntities.put(sender.getUUID(), marker.getId());
+        FPSMatch.LOGGER.info("[BO PingSrv] spawned marker id={} owner={} type={} pos=({},{},{})",
+                marker.getId(), sender.getUUID(), type,
+                String.format(java.util.Locale.ROOT, "%.2f", x),
+                String.format(java.util.Locale.ROOT, "%.2f", y),
+                String.format(java.util.Locale.ROOT, "%.2f", z));
+
+        // 广播给同队玩家（客户端渲染屏幕标记/光柱）
+        com.ptcrys.blockoffensive.net.ping.PingS2CPacket packet =
+                new com.ptcrys.blockoffensive.net.ping.PingS2CPacket(
+                        sender.getGameProfile().getName(), type, x, y, z);
+        this.getMapTeams().getTeamByPlayer(sender).ifPresent(team ->
+                team.getOnlinePlayers().forEach(uuid -> this.getPlayerByUUID(uuid)
+                        .ifPresent(p -> FPSMatch.sendToPlayer(p, packet)))
+        );
     }
 
     @Override

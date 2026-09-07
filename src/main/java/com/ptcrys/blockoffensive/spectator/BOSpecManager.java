@@ -47,8 +47,12 @@ public final class BOSpecManager {
     private static final float ORBIT_RADIUS = 4.0F;
     private static final long DEDUP_NS = 250_000_000L;
     private static final long KILLCAM_CONTEXT_TTL_TICKS = 200L;
-    /** 击杀回放时限(tick)：窗口内服务端不自动接管相机，避免附着包抢先触发杀死回放。 */
-    private static final long KILLCAM_WINDOW_TICKS = 90L;
+    /**
+     * 击杀回放时限(tick)：窗口内服务端不自动接管相机，避免附着包抢先触发杀死回放。
+     * 该值必须大于客户端 KillCam 实际播放时长（PULL 50 + HOLD 40 + FADE 24 ≈ 114 tick），
+     * 否则服务端会在回放播完前强制接管相机，截断回放尾部。
+     */
+    private static final long KILLCAM_WINDOW_TICKS = 160L;
     private static final Map<UUID, SpectateMode> MODES = new ConcurrentHashMap<>();
     private static final Map<UUID, Long> LAST_KILLCAM_NS = new ConcurrentHashMap<>();
     private static final Map<UUID, KillCamDeathContext> DEATH_CONTEXTS = new ConcurrentHashMap<>();

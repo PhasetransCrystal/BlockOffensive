@@ -29,6 +29,31 @@ public class CSClientData {
 
     public static final Map<UUID, WeaponData> weaponData = new ConcurrentHashMap<>();
 
+    // ===== 队友 Ping（Z 轮盘 → 世界内光柱标记，TTL 后自动消失） =====
+    public static final int PING_MAX = 8;
+    public static final java.util.List<PingData> pings = new java.util.concurrent.CopyOnWriteArrayList<>();
+
+    public record PingData(String senderName, int type, double x, double y, double z, long expiresMs) {
+        public boolean expired() {
+            return System.currentTimeMillis() >= expiresMs;
+        }
+    }
+
+    public static void pushPing(String senderName, int type, double x, double y, double z) {
+        long ttl = com.ptcrys.blockoffensive.BOConfig.common.pingTtlSeconds.get() * 1000L;
+        // 同一玩家再次 Ping：旧标记立即消失，只保留新标记
+        pings.removeIf(p -> p.senderName().equals(senderName));
+        pings.add(new PingData(senderName, type, x, y, z, System.currentTimeMillis() + ttl));
+        purgeExpiredPings();
+        while (pings.size() > PING_MAX) {
+            pings.remove(0);
+        }
+    }
+
+    public static void purgeExpiredPings() {
+        pings.removeIf(PingData::expired);
+    }
+
 
     public static int getMoney() {
         Minecraft mc = Minecraft.getInstance();
@@ -59,6 +84,7 @@ public class CSClientData {
         dismantleBombProgress = 0;
         bombFuse = 0;
         bombTotalFuse = 0;
+        pings.clear();
         weaponData.clear();
     }
 

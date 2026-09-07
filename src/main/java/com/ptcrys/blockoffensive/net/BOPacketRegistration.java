@@ -85,5 +85,22 @@ public final class BOPacketRegistration {
                     : Direction.DEFAULT;
             registrar.register(legacy[discriminator], direction);
         }
+        // 本地功能数据包（Ping 标记 + MVP 音乐，顺序与 legacy 内联注册一致）
+        registrar.register(
+                com.ptcrys.blockoffensive.net.ping.PingC2SPacket.class,
+                Direction.PLAY_TO_SERVER
+        );
+        registrar.register(
+                com.ptcrys.blockoffensive.net.ping.PingS2CPacket.class,
+                Direction.PLAY_TO_CLIENT
+        );
+        registrar.register(
+                com.ptcrys.blockoffensive.net.mvp.MvpMusicUploadC2SPacket.class,
+                Direction.PLAY_TO_SERVER
+        );
+        registrar.register(
+                com.ptcrys.blockoffensive.net.mvp.MvpMusicChunkS2CPacket.class,
+                Direction.PLAY_TO_CLIENT
+        );
     }
 }

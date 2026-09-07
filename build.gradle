@@ -158,6 +158,11 @@ dependencies {
     modRuntimeOnly "dev.architectury:architectury-forge:${architectury_version}"
     modRuntimeOnly "maven.modrinth:spark:1.10.53-forge"
 
+    implementation(jarJar("com.googlecode.soundlibs:jlayer:1.0.1.4"))
+    implementation(jarJar("com.googlecode.soundlibs:jorbis:0.0.17.4"))
+    implementation(jarJar("com.googlecode.soundlibs:vorbisspi:1.0.3.3"))
+    implementation(jarJar("com.googlecode.soundlibs:tritonus-share:0.3.7.4"))
+
 }
 
 // Generated resources and packaging
