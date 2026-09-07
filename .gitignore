@@ -13,6 +13,7 @@
 *.iws
 out/
 atlassian-ide-plugin.xml
+/.trae/
 
 # Local environment
 .env
