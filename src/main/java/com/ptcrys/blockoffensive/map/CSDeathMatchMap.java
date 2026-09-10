@@ -347,7 +347,13 @@ public class CSDeathMatchMap extends CSMap {
         }
 
         this.getMapTeams().getPlayerData(player).ifPresent(data -> data.setLiving(true));
+        this.clearInventory(player);
         givePlayerKits(player);
+
+        this.getMapTeams().getTeamByPlayer(player).flatMap(ShopCapability::getShop).ifPresent(shop -> {
+            shop.getDefaultAndPutData(player.getUUID(), false).lockShopSlots(player);
+            shop.syncShopData(player);
+        });
         
         // 给予重生保护（以服务器游戏时间计时，跟随游戏节奏而非墙钟）
         getDMPlayerData(player.getUUID()).ifPresent(d -> d.respawn(this.getServerLevel().getGameTime()));

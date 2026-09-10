@@ -133,6 +133,9 @@ public final class BOSpecManager {
         if (!spectator.isSpectator()) {
             MODES.remove(id);
             ATTACH_AFTER_TICK.remove(id);
+            LAST_KILLCAM_NS.remove(id);
+            DEATH_CONTEXTS.remove(id);
+            DamagePosTracker.clearDeathPose(id);
             return;
         }
         // 击杀回放窗口内不自动接管相机，避免附着包抢先触发打断回放

@@ -54,6 +54,9 @@ public class BOCommandRegister {
         FPSMHelpManager.getInstance().registerCommandHelp("fpsm mvp", Component.translatable("commands.blockoffensive.mvp.description"));
         FPSMHelpManager.getInstance().registerCommandParameters("fpsm mvp", "*targets", "*sound", "[name]");
 
+        event.addChild(CloneDataCommand.build());
+        CloneDataCommand.registerHelp();
+
         if (!FMLEnvironment.production) {
             event.addChild(BOTaczLiveFireDebugCommand.fpsmCommand());
             event.addChild(BOPhysicsRagdollDebugCommand.fpsmCommand());

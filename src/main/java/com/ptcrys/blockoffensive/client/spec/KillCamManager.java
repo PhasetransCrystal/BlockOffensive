@@ -338,6 +338,7 @@ public final class KillCamManager {
                     holdBlack = true;
                     BlockOffensive.INSTANCE.sendToServer(new RequestAttachTeammateC2SPacket());
                     tryLocalAttachToNearestTeammate();
+                    finishKillCamForSpectating();
                 }
             }
             default -> {
@@ -1112,6 +1113,13 @@ public final class KillCamManager {
         clearKillCamState(true);
     }
 
+    private static void finishKillCamForSpectating() {
+        int remainingAttachTries = clientAttachTries;
+        clearKillCamState(false);
+        clientAttachTries = remainingAttachTries;
+        clientAttachCooldown = 5;
+    }
+
     private static void clearKillCamState(boolean restoreCamera) {
         if (restoreCamera) {
             forceRestoreCameraToPlayer();
@@ -1120,6 +1128,11 @@ public final class KillCamManager {
             // 表现为"重生后视角没回到玩家本体"。
             SpectateState.set(SpectateMode.FREE);
             SpectatorCameraController.reset();
+        } else {
+            Minecraft mc = Minecraft.getInstance();
+            if (mc.player != null && mc.getCameraEntity() == ghostCam) {
+                mc.setCameraEntity(mc.player);
+            }
         }
         blackFade = 0.0F;
         disableGray();

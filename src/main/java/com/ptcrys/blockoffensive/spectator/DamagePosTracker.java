@@ -47,6 +47,13 @@ public final class DamagePosTracker {
         return player == null ? 0.0F : DEATH_PITCHES.getOrDefault(player.getUUID(), player.getXRot());
     }
 
+    public static void clearDeathPose(UUID playerId) {
+        if (playerId == null) return;
+        DEATH_POSES.remove(playerId);
+        DEATH_YAWS.remove(playerId);
+        DEATH_PITCHES.remove(playerId);
+    }
+
     @SubscribeEvent
     public static void onLivingHurt(LivingHurtEvent e){
         LivingEntity ent = e.getEntity();
