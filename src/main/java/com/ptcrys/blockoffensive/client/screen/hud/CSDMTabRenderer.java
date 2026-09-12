@@ -19,23 +19,6 @@ import java.util.UUID;
 
 public class CSDMTabRenderer extends CSGameTabRenderer {
 
-    // Deathmatch keeps the compact one-table layout; the CS bomb mode uses the wider reference layout.
-    protected static final int COL_PING = 40;
-    protected static final int AVATAR_SIZE = 12;
-    protected static final int COL_NAME = 110;
-    protected static final int COL_MONEY = 40;
-    protected static final int COL_KILL = 35;
-    protected static final int COL_DEATH = 35;
-    protected static final int COL_ASSIST = 35;
-    protected static final int COL_HEADSHOT = 40;
-    protected static final int COL_DAMAGE = 48;
-    protected static final int ROW_HEIGHT = 12;
-    protected static final int ROW_GAP = 2;
-    protected static final int BG_PADDING = 10;
-    protected static final int HEADER_HEIGHT = 12;
-    protected static final int PLAYER_AREA_WIDTH = 400;
-    protected static final int ROW_NAME_AREA = COL_PING + AVATAR_SIZE + COL_PADDING + COL_NAME;
-
     private static final int COL_KD = 35;
     private static final int COL_SCORE = 48;
 
