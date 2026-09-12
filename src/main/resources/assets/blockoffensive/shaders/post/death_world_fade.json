@@ -1,0 +1,22 @@
+{
+  "targets": [ "swap" ],
+  "passes": [
+    {
+      "name": "blockoffensive:death_world_fade",
+      "intarget": "minecraft:main",
+      "outtarget": "swap",
+      "uniforms": [
+        { "name": "HitStrength", "values": [ 0.72 ] },
+        { "name": "VignetteStrength", "values": [ 1.0 ] },
+        { "name": "BlurStrength", "values": [ 0.52 ] },
+        { "name": "PresentationProgress", "values": [ 0.0 ] },
+        { "name": "FadeProgress", "values": [ 0.0 ] }
+      ]
+    },
+    {
+      "name": "minecraft:blit",
+      "intarget": "swap",
+      "outtarget": "minecraft:main"
+    }
+  ]
+}

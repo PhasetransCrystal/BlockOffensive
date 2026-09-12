@@ -283,7 +283,7 @@
   "setting.csdm.matchTimeLimit": "Match Time Limit",
   "setting.csdm.matchTimeLimit.desc": "Maximum match duration in deathmatch (ticks)",
   "setting.csdm.spawnProtectionTime": "Spawn Protection Time",
-  "setting.csdm.spawnProtectionTime.desc": "Invulnerability duration after respawn (ticks)",
+  "setting.csdm.spawnProtectionTime.desc": "Invulnerability duration after respawn (seconds)",
   "fpsm.game_type.cs": "CS Bomb Defusal",
   "fpsm.game_type.csdm": "CS Deathmatch",
   "fpsm.dimension.minecraft.overworld": "Overworld",

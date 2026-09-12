@@ -656,7 +656,11 @@ public class CSGameShopScreen extends Fragment implements ScreenCallback {
 
         public void updateButtonState() {
             ClientShopSlot currentSlot = this.getSlot();
-            boolean enable = CSClientData.canOpenShop && CSClientData.getMoney() >= currentSlot.cost() && !currentSlot.itemStack().isEmpty() && !currentSlot.isLocked();
+            int money = CSClientData.getMoney();
+            boolean enable = CSClientData.canOpenShop
+                    && (money == -1 || money >= currentSlot.cost())
+                    && !currentSlot.itemStack().isEmpty()
+                    && !currentSlot.isLocked();
             this.setElements(enable);
 
             if (!this.isHovered()) {

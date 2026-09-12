@@ -11,6 +11,7 @@ import com.ptcrys.fpsmatch.core.FPSMCore;
 import com.ptcrys.fpsmatch.common.event.FPSMapEvent;
 import com.ptcrys.fpsmatch.common.event.PlayerObtainItemEvent;
 import com.ptcrys.fpsmatch.common.event.FPSMGunShootEvent;
+import com.ptcrys.fpsmatch.common.event.FPSMGunDamageEvent;
 import com.ptcrys.fpsmatch.common.event.FPSMGunReloadEvent;
 import com.ptcrys.fpsmatch.compat.gun.GunCompatManager;
 import com.ptcrys.fpsmatch.core.data.PlayerData;
@@ -22,6 +23,7 @@ import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.eventbus.api.EventPriority;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.fml.common.Mod;
 
@@ -80,6 +82,23 @@ public class CSGameEvents {
         }
     }
 
+    @SubscribeEvent(priority = EventPriority.HIGHEST)
+    public static void onDeathmatchGunDamage(FPSMGunDamageEvent event) {
+        if (!(event.getHurtEntity() instanceof ServerPlayer hurt)) return;
+        if (!(event.getAttacker() instanceof ServerPlayer attacker)) return;
+
+        FPSMCore.getInstance().getMapByPlayer(hurt)
+                .filter(map -> map instanceof CSDeathMatchMap)
+                .map(map -> (CSDeathMatchMap) map)
+                .filter(dm -> FPSMCore.getInstance().getMapByPlayer(attacker).orElse(null) == dm)
+                .filter(dm -> dm.isInSpawnProtection(hurt.getUUID())
+                        || (dm.isTDM() && dm.getMapTeams().isSameTeam(attacker, hurt)))
+                .ifPresent(dm -> {
+                    event.setBaseAmount(0.0F);
+                    event.setHeadshotMultiplier(0.0F);
+                });
+    }
+
     @SubscribeEvent
     public static void onKillRecord(FPSMapEvent.PlayerEvent.KillRecordEvent event) {
         if (event.getMap() instanceof CSMap && isC4Kill(event.getSource())) {
@@ -93,16 +112,16 @@ public class CSGameEvents {
 
         ServerPlayer killer = event.getPlayer();
         ServerPlayer dead = event.getDead();
+        if (killer.getUUID().equals(dead.getUUID())) return;
         boolean teammateKill = cs.getMapTeams().isSameTeam(killer, dead) && !isC4Kill(event.getSource());
         if (cs instanceof CSDeathMatchMap dm) {
             if (dm.isTDM() && teammateKill) {
                 return;
             }
 
-            // CS2 死斗计分：击杀 +100，爆头击杀额外 +50（合计 150）
-            // 注：TDM 友伤已在 HurtEvent 屏蔽、FFA 各玩家独立队伍，teammateKill 此处实际不可达
+            ItemStack weapon = cs.resolveDeathItem(killer, event.getSource());
             cs.getMapTeams().getPlayerData(killer).ifPresent(data ->
-                    data.addScore(event.isHeadshot() ? 150 : 100)
+                    data.addScore(dm.getDeathmatchKillScore(weapon))
             );
             return;
         }
@@ -127,7 +146,12 @@ public class CSGameEvents {
                             return dm;
                         }
                         return null;
-                    }).ifPresent(dm-> dm.handlePlayerFire(player.getUUID()));
+                    }).ifPresent(dm -> {
+                        dm.handlePlayerFire(player.getUUID());
+                        if (player instanceof ServerPlayer serverPlayer) {
+                            dm.replenishAmmoReserve(serverPlayer);
+                        }
+                    });
         }
     }
 

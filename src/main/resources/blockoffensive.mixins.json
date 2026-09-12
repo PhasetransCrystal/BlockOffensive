@@ -13,6 +13,11 @@
     "StepSoundMixin"
   ],
   "client": [
+    "client.DeathCameraMixin",
+    "client.DeathSpectatorTargetMixin",
+    "client.DeathWorldRenderMixin",
+    "client.PostChainAccessor",
+    "client.PostPassAccessor",
     "client.PlayerRendererMixin",
     "client.C4ItemOutlineMixin",
     "client.SoundEngineChannelAccessor",

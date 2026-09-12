@@ -901,10 +901,9 @@ public abstract class CSMap extends BaseRoundMap<String, CSRoundResultReason> {
         }
 
         if (allowSpecAttach.get()) {
-            if (attacker != null
-                    && deadPlayer.isSpectator()
-                    && !attacker.getUUID().equals(deadPlayer.getUUID())) {
-                BOSpecManager.sendKillCamAndAttach(deadPlayer, attacker, deathItem);
+            if (deadPlayer.isSpectator()) {
+                // Environmental deaths and suicides need the same presentation/attach lifecycle.
+                BOSpecManager.sendKillCamAndAttach(deadPlayer, attacker == null ? deadPlayer : attacker, deathItem);
             }
         }
 

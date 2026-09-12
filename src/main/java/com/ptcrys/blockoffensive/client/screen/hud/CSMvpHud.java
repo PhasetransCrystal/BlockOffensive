@@ -281,10 +281,6 @@ public class CSMvpHud {
         guiGraphics.fill(x, yPosition, x + animatedWidth, yPosition + 1, 0x30FFFFFF);
         guiGraphics.fill(x, yPosition + scaledPanelHeight - 1, x + animatedWidth, yPosition + scaledPanelHeight, 0x50000000);
 
-        // 左侧阵营指示条
-        int sideBarW = Math.max(2, (int) (4 * scaleFactor));
-        guiGraphics.fill(x, yPosition, x + sideBarW, yPosition + scaledPanelHeight, resolveTeamColor());
-
         // 面板未展开到一定程度时不渲染内容
         if (progress < 0.2f) return;
 
@@ -306,7 +302,7 @@ public class CSMvpHud {
         renderVinylDisc(pose, discCenterX, discCenterY, vinylRadius, currentTime);
 
         // 2. 渲染唱片封套 (Album Sleeve / Jacket - 显示玩家皮肤头像与黑胶封套边框)
-        renderAlbumSleeve(guiGraphics, sleeveX, sleeveY, scaledSleeveSize, scaleFactor);
+        renderAlbumSleeve(guiGraphics, sleeveX, sleeveY, scaledSleeveSize);
 
         // 3. 渲染右侧 MVP 信息与音乐盒详情
         int infoStartX = sleeveX + (int) (scaledSleeveSize + maxSlideDistance) + Math.max(8, (int) (14 * scaleFactor));
@@ -361,24 +357,18 @@ public class CSMvpHud {
     /**
      * 渲染唱片封套 (Album Cover / Jacket)
      */
-    private void renderAlbumSleeve(GuiGraphics guiGraphics, int x, int y, int size, float scaleFactor) {
+    private void renderAlbumSleeve(GuiGraphics guiGraphics, int x, int y, int size) {
         // 投影与外框底板
         guiGraphics.fill(x - 2, y - 1, x + size + 2, y + size + 3, 0x90000000);
         guiGraphics.fill(x, y, x + size, y + size, 0xFF14171E);
 
         // 玩家头像（作为唱片封面）
-        int pad = Math.max(2, (int) (3 * scaleFactor));
-        int avSize = size - pad * 2;
-        renderAvatar(guiGraphics, x + pad, y + pad, avSize);
+        renderAvatar(guiGraphics, x, y, size);
 
         // 封套外框与玻璃光泽质感
         guiGraphics.fill(x, y, x + size, y + 1, 0x50FFFFFF);
         guiGraphics.fill(x, y + size - 1, x + size, y + size, 0x60000000);
         guiGraphics.fill(x + size - 1, y, x + size, y + size, 0x40000000);
-
-        // 左边缘阵营色竖标
-        int accentW = Math.max(2, (int) (3 * scaleFactor));
-        guiGraphics.fill(x, y, x + accentW, y + size, resolveTeamColor());
     }
 
     /**
@@ -443,7 +433,7 @@ public class CSMvpHud {
                     .append(Component.literal("Music Kit | " + musicNameStr).withStyle(ChatFormatting.AQUA));
         }
 
-        float musicScale = fitTextScale(musicComp, scaleFactor * 1.05f, maxWidth);
+        float musicScale = fitTextScale(musicComp, scaleFactor * 1.35f, maxWidth);
         int musicY = reasonY + pillHeight + Math.max(4, (int) (6 * scaleFactor));
         renderScaledText(guiGraphics, pose, musicComp, startX, musicY, 0xFFCAD4DF, musicScale);
     }

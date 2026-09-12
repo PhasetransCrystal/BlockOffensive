@@ -4,30 +4,19 @@ import java.util.List;
 import java.util.Objects;
 
 /**
- * Pure CSDM FFA/TDM team relation helpers.
- * MapTeams.isSameTeam must not hardcode csdm=false; providers use runtime relation via these rules.
+ * Pure CSDM roster and combat-relation helpers.
  */
 public final class CSDMTeamSemantics {
-    public static final int FFA_TEAM_CAPACITY = 1;
-    public static final int TDM_TEAM_CAPACITY = 16;
+    public static final int TEAM_CAPACITY = 16;
     public static final String SPECTATOR = "spectator";
 
-    private static final List<String> FFA_BASE_POOL = List.of("1", "2", "3", "4", "5");
-    private static final List<String> TDM_POOL = List.of("1", "2");
+    private static final List<String> TEAM_POOL = List.of("ct", "t");
 
     private CSDMTeamSemantics() {
     }
 
-    public static int teamCapacity(boolean isTdm) {
-        return isTdm ? TDM_TEAM_CAPACITY : FFA_TEAM_CAPACITY;
-    }
-
-    public static List<String> ffaBaseTeamPool() {
-        return FFA_BASE_POOL;
-    }
-
-    public static List<String> tdmTeamPool() {
-        return TDM_POOL;
+    public static List<String> teamPool() {
+        return TEAM_POOL;
     }
 
     /**

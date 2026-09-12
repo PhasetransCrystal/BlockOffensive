@@ -54,12 +54,17 @@ public class BOClientEvent {
 
     @SubscribeEvent
     public static void onClientTickEvent(TickEvent.ClientTickEvent event) {
+        Minecraft mc = Minecraft.getInstance();
         FPSMClientGlobalData data = FPSMClient.getGlobalData();
-        if(CSClientData.isStart && (!data.isInMap() || !data.isInGame())){
+        if (event.phase == TickEvent.Phase.END
+                && mc.player != null
+                && mc.level != null
+                && mc.getConnection() != null
+                && CSClientData.isStart
+                && (!data.isInMap() || !data.isInGame())) {
             FPSMatch.pullGameInfo();
         }
 
-        Minecraft mc = Minecraft.getInstance();
         lockMove(mc);
 
         if(BOConfig.common.webServerEnabled.get()){

@@ -38,11 +38,9 @@ public class SwitchSpectatorKey {
             return;
         }
 
-        // 仅当视角真正挂在某位存活队友身上时才切换目标。
-        // 自由飞行（视角在自身）或 KillCam 拉镜阶段（视角在 ghost 实体）时，
-        // A/D 完全交给原版观战飞行，避免"按 A/D 切人又把视角甩出去"的双重行为。
-        Entity cam = mc.getCameraEntity();
-        if (cam == null || cam == player || !(cam instanceof Player p) || !p.isAlive() || p.isSpectator()) {
+        if (mc.screen != null || com.ptcrys.blockoffensive.client.spec.KillCamManager.isActive()) return;
+        Entity camera = mc.getCameraEntity();
+        if (!(camera instanceof Player teammate) || teammate == player || !teammate.isAlive() || teammate.isSpectator()) {
             return;
         }
 

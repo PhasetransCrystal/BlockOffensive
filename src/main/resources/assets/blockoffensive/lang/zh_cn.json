@@ -283,7 +283,7 @@
   "setting.csdm.matchTimeLimit": "比赛时间限制",
   "setting.csdm.matchTimeLimit.desc": "死斗模式比赛的最大时长（tick）",
   "setting.csdm.spawnProtectionTime": "出生保护时间",
-  "setting.csdm.spawnProtectionTime.desc": "玩家重生后的无敌保护时间（tick）",
+  "setting.csdm.spawnProtectionTime.desc": "玩家重生后的无敌保护时间（秒）",
   "fpsm.game_type.cs": "CS爆破模式",
   "fpsm.game_type.csdm": "CS死斗模式",
   "fpsm.dimension.minecraft.overworld": "主世界",

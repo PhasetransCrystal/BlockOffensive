@@ -47,13 +47,11 @@ public final class BOSpecManager {
     private static final float ORBIT_RADIUS = 4.0F;
     private static final long DEDUP_NS = 250_000_000L;
     private static final long KILLCAM_CONTEXT_TTL_TICKS = 200L;
-    /**
-     * 击杀回放时限(tick)：窗口内服务端不自动接管相机，避免附着包抢先触发杀死回放。
-     * 该值必须大于客户端 KillCam 实际播放时长（PULL 50 + HOLD 40 + FADE 24 ≈ 114 tick），
-     * 否则服务端会在回放播完前强制接管相机，截断回放尾部。
-     */
-    private static final long KILLCAM_WINDOW_TICKS = 160L;
+    // 26 ticks of presentation plus time for client delivery/acknowledgement.
+    private static final long KILLCAM_WINDOW_TICKS = 80L;
+    private static final long KILLCAM_PRESENTATION_TICKS = 26L;
     private static final Map<UUID, SpectateMode> MODES = new ConcurrentHashMap<>();
+    private static final Map<UUID, Integer> TARGET_ENTITY_IDS = new ConcurrentHashMap<>();
     private static final Map<UUID, Long> LAST_KILLCAM_NS = new ConcurrentHashMap<>();
     private static final Map<UUID, KillCamDeathContext> DEATH_CONTEXTS = new ConcurrentHashMap<>();
     /** 每个死亡玩家应在该 tick 之后才允许自动接管相机（击杀回放结束）。 */
@@ -96,8 +94,7 @@ public final class BOSpecManager {
 
     public static void sendKillCamAndAttach(ServerPlayer dead, DamageSource source) {
         ServerPlayer killer = FPSMUtil.getKiller(dead, source);
-        if (killer == null) return;
-        sendKillCamAndAttach(dead, killer, FPSMUtil.getKillerWeapon(source));
+        sendKillCamAndAttach(dead, killer == null ? dead : killer, FPSMUtil.getKillerWeapon(source));
     }
 
     public static void sendKillCamAndAttach(ServerPlayer dead, ServerPlayer killer, ItemStack weapon) {
@@ -115,6 +112,10 @@ public final class BOSpecManager {
         Long previous = LAST_KILLCAM_NS.put(dead.getUUID(), now);
         if (previous != null && now - previous < DEDUP_NS) return;
         // 击杀回放窗口开启：在窗口结束前，服务端不自动接管该玩家的相机
+        DamagePosTracker.recordDeathPose(dead);
+        MODES.remove(dead.getUUID());
+        TARGET_ENTITY_IDS.remove(dead.getUUID());
+        dead.setCamera(dead);
         ATTACH_AFTER_TICK.put(dead.getUUID(), dead.serverLevel().getGameTime() + KILLCAM_WINDOW_TICKS);
         ItemStack copy = weapon == null ? ItemStack.EMPTY : weapon.copy();
         if (!copy.isEmpty()) copy.setCount(1);
@@ -132,6 +133,7 @@ public final class BOSpecManager {
         UUID id = spectator.getUUID();
         if (!spectator.isSpectator()) {
             MODES.remove(id);
+            TARGET_ENTITY_IDS.remove(id);
             ATTACH_AFTER_TICK.remove(id);
             LAST_KILLCAM_NS.remove(id);
             DEATH_CONTEXTS.remove(id);
@@ -151,7 +153,7 @@ public final class BOSpecManager {
             selectAndApplyTarget(spectator);
         } else if (mode == SpectateMode.TEAMMATE && !isCameraOnTeammate(spectator)) {
             selectAndApplyTarget(spectator);
-        } else if (mode == SpectateMode.C4_ORBIT && !hasC4(spectator)) {
+        } else if (mode == SpectateMode.C4_ORBIT && !isCameraOnC4(spectator)) {
             selectAndApplyTarget(spectator);
         }
     }
@@ -166,6 +168,9 @@ public final class BOSpecManager {
     public static void requestAttachTeammate(ServerPlayer spectator) {
         // 显式附着请求(击杀回放 FADE 结束)立即接管，并清除自动接管窗口
         if (spectator == null) return;
+        Long deadline = ATTACH_AFTER_TICK.get(spectator.getUUID());
+        if (deadline != null && spectator.serverLevel().getGameTime()
+                < deadline - KILLCAM_WINDOW_TICKS + KILLCAM_PRESENTATION_TICKS) return;
         ATTACH_AFTER_TICK.remove(spectator.getUUID());
         if (spectator.isSpectator()) {
             selectAndApplyTarget(spectator);
@@ -174,65 +179,83 @@ public final class BOSpecManager {
 
     public static void switchTeammate(ServerPlayer spectator, SwitchSpectateC2SPacket.SwitchDirection direction) {
         if (spectator == null || !spectator.isSpectator()) return;
+        if (ATTACH_AFTER_TICK.containsKey(spectator.getUUID())) return;
         Optional<BaseMap> map = FPSMCore.getInstance().getMapByPlayer(spectator);
         if (map.isEmpty()) return;
         ServerTeam team = map.get().getMapTeams().getTeamByPlayer(spectator).orElse(null);
         if (team == null) return;
         List<ServerPlayer> teammates = livingTeammates(spectator, team);
         if (teammates.isEmpty()) return;
-        int current = teammates.indexOf(spectator.getCamera());
-        if (current < 0) current = direction == SwitchSpectateC2SPacket.SwitchDirection.NEXT ? -1 : 0;
-        int next = direction == SwitchSpectateC2SPacket.SwitchDirection.NEXT
-                ? (current + 1) % teammates.size()
-                : (current - 1 + teammates.size()) % teammates.size();
-        applyTeammate(spectator, teammates.get(next));
+
+        int current = -1;
+        if (MODES.get(spectator.getUUID()) == SpectateMode.TEAMMATE) {
+            int targetId = TARGET_ENTITY_IDS.getOrDefault(spectator.getUUID(), -1);
+            for (int i = 0; i < teammates.size(); ++i) {
+                if (teammates.get(i).getId() == targetId) {
+                    current = i;
+                    break;
+                }
+            }
+        }
+        int next;
+        if (current < 0) {
+            next = direction == SwitchSpectateC2SPacket.SwitchDirection.NEXT
+                    ? 0 : teammates.size() - 1;
+        } else {
+            next = Math.floorMod(current + (direction == SwitchSpectateC2SPacket.SwitchDirection.NEXT ? 1 : -1), teammates.size());
+        }
+        ServerPlayer teammate = teammates.get(next);
+        applyTarget(spectator, new SpectateTarget(SpectateMode.TEAMMATE, teammate.getId(), teammate.position(),
+                teammate.getYRot(), teammate.getXRot(), ORBIT_RADIUS));
     }
 
     private static void selectAndApplyTarget(ServerPlayer spectator) {
-        // 仅接管"由死亡流程进入观战"(setBystander -> startSpectating 记录过死亡位姿)的玩家。
-        // 手动切换旁观者(/gamemode spectator)的存活玩家没有死亡位姿，
-        // 若被接管会让相机钉在其本体位置(DEATH_SPOT 回退到 getEyePosition)，
-        // 表现为"没死但切旁观后视角异常"。手动旁观保持原版自由相机。
-        if (spectator == null || DamagePosTracker.getDeathPose(spectator).isEmpty()) {
-            return;
-        }
+        List<SpectateTarget> targets = availableTargets(spectator);
+        if (!targets.isEmpty()) applyTarget(spectator, targets.get(0));
+    }
+
+    private static List<SpectateTarget> availableTargets(ServerPlayer spectator) {
+        // Only death-managed spectators are restricted; manual spectator mode is unaffected.
+        if (spectator == null || DamagePosTracker.getDeathPose(spectator).isEmpty()) return List.of();
         Optional<BaseMap> map = FPSMCore.getInstance().getMapByPlayer(spectator);
-        if (map.isEmpty()) return;
+        if (map.isEmpty()) return List.of();
+        List<SpectateTarget> targets = new java.util.ArrayList<>();
         ServerTeam team = map.get().getMapTeams().getTeamByPlayer(spectator).orElse(null);
-        if (team == null) return;
-        List<ServerPlayer> teammates = livingTeammates(spectator, team);
-        if (!teammates.isEmpty()) {
-            applyTeammate(spectator, teammates.get(0));
-            return;
+        if (team != null) {
+            for (ServerPlayer teammate : livingTeammates(spectator, team)) {
+                targets.add(new SpectateTarget(SpectateMode.TEAMMATE, teammate.getId(), teammate.position(),
+                        teammate.getYRot(), teammate.getXRot(), ORBIT_RADIUS));
+            }
         }
-        AABB bounds = map.get().mapArea.aabb();
-        ServerLevel level = spectator.serverLevel();
-        Entity c4 = findC4(level, bounds);
+        Entity c4 = findC4(spectator.serverLevel(), map.get().mapArea.aabb());
         if (c4 != null) {
-            applyTarget(spectator, new SpectateTarget(SpectateMode.C4_ORBIT, c4.getId(), c4.position(), spectator.getYRot(), 0.0F, ORBIT_RADIUS));
-            return;
+            targets.add(new SpectateTarget(SpectateMode.C4_ORBIT, c4.getId(), c4.position(),
+                    spectator.getYRot(), 0.0F, ORBIT_RADIUS));
         }
-        Vec3 death = DamagePosTracker.getDeathPose(spectator).orElse(spectator.getEyePosition(1.0F));
-        applyTarget(spectator, new SpectateTarget(SpectateMode.DEATH_SPOT, spectator.getId(), death,
+        targets.add(new SpectateTarget(SpectateMode.DEATH_SPOT, spectator.getId(),
+                DamagePosTracker.getDeathPose(spectator).orElseThrow(),
                 DamagePosTracker.getDeathYaw(spectator), DamagePosTracker.getDeathPitch(spectator), ORBIT_RADIUS));
+        return targets;
     }
 
     private static List<ServerPlayer> livingTeammates(ServerPlayer spectator, ServerTeam team) {
         return team.getPlayerList().stream()
                 .map(uuid -> spectator.server.getPlayerList().getPlayer(uuid))
-                .filter(player -> player != null && player != spectator && player.isAlive() && !player.isSpectator())
+                .filter(player -> player != null && player != spectator && player.isAlive() && !player.isSpectator() && player.serverLevel() == spectator.serverLevel())
                 .sorted(Comparator.comparing(player -> player.getUUID().toString()))
                 .toList();
     }
 
-    private static void applyTeammate(ServerPlayer spectator, ServerPlayer teammate) {
-        spectator.setCamera(teammate);
-        applyTarget(spectator, new SpectateTarget(SpectateMode.TEAMMATE, teammate.getId(), teammate.position(), teammate.getYRot(), teammate.getXRot(), ORBIT_RADIUS));
-    }
-
     private static void applyTarget(ServerPlayer spectator, SpectateTarget target) {
         MODES.put(spectator.getUUID(), target.mode());
-        if (target.mode() != SpectateMode.TEAMMATE) spectator.setCamera(spectator);
+        TARGET_ENTITY_IDS.put(spectator.getUUID(), target.entityId());
+        if (target.mode() == SpectateMode.TEAMMATE) {
+            Entity entity = spectator.serverLevel().getEntity(target.entityId());
+            if (entity == null) return;
+            spectator.setCamera(entity);
+        } else {
+            spectator.setCamera(spectator);
+        }
         FPSMatch.sendToPlayer(spectator, new SpectatorTargetS2CPacket(
                 target.mode(), target.entityId(), target.anchor(), target.yaw(), target.pitch(), target.orbitRadius()));
     }
@@ -244,9 +267,12 @@ public final class BOSpecManager {
         return map.isPresent() && map.get().getMapTeams().isSameTeam(spectator, player);
     }
 
-    private static boolean hasC4(ServerPlayer spectator) {
-        Optional<BaseMap> map = FPSMCore.getInstance().getMapByPlayer(spectator);
-        return map.isPresent() && findC4(spectator.serverLevel(), map.get().mapArea.aabb()) != null;
+    private static boolean isCameraOnC4(ServerPlayer spectator) {
+        Entity target = spectator.serverLevel().getEntity(TARGET_ENTITY_IDS.getOrDefault(spectator.getUUID(), -1));
+        if (target == null || target.isRemoved()) return false;
+        if (target instanceof CompositionC4Entity) return true;
+        if (target instanceof MatchDropEntity drop) return drop.getItem().is(BOItemRegister.C4.get());
+        return target instanceof ItemEntity item && item.getItem().is(BOItemRegister.C4.get());
     }
 
     private static Entity findC4(ServerLevel level, AABB bounds) {

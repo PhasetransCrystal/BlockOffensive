@@ -1,0 +1,33 @@
+{
+  "blend": {
+    "func": "add",
+    "srcrgb": "one",
+    "dstrgb": "zero",
+    "srcalpha": "one",
+    "dstalpha": "zero"
+  },
+  "vertex": "blockoffensive:death_world_fade",
+  "fragment": "blockoffensive:death_world_fade",
+  "attributes": [ "Position" ],
+  "samplers": [ { "name": "DiffuseSampler" } ],
+  "uniforms": [
+    {
+      "name": "ProjMat",
+      "type": "matrix4x4",
+      "count": 16,
+      "values": [
+        1.0, 0.0, 0.0, 0.0,
+        0.0, 1.0, 0.0, 0.0,
+        0.0, 0.0, 1.0, 0.0,
+        0.0, 0.0, 0.0, 1.0
+      ]
+    },
+    { "name": "InSize", "type": "float", "count": 2, "values": [ 1.0, 1.0 ] },
+    { "name": "OutSize", "type": "float", "count": 2, "values": [ 1.0, 1.0 ] },
+    { "name": "HitStrength", "type": "float", "count": 1, "values": [ 0.72 ] },
+    { "name": "VignetteStrength", "type": "float", "count": 1, "values": [ 1.0 ] },
+    { "name": "BlurStrength", "type": "float", "count": 1, "values": [ 0.52 ] },
+    { "name": "PresentationProgress", "type": "float", "count": 1, "values": [ 0.0 ] },
+    { "name": "FadeProgress", "type": "float", "count": 1, "values": [ 0.0 ] }
+  ]
+}

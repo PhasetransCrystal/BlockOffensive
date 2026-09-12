@@ -4,11 +4,15 @@ import com.google.gson.JsonElement;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 import com.ptcrys.blockoffensive.BlockOffensive;
+import com.ptcrys.fpsmatch.common.attributes.ammo.BulletproofArmorAttribute;
 import com.ptcrys.fpsmatch.common.capability.map.GameEndTeleportCapability;
 import com.ptcrys.fpsmatch.common.capability.team.ShopCapability;
 import com.ptcrys.fpsmatch.common.capability.team.StartKitsCapability;
 import com.ptcrys.fpsmatch.common.capability.team.SpawnPointCapability;
 import com.ptcrys.fpsmatch.common.packet.FPSMatchStatsResetS2CPacket;
+import com.ptcrys.fpsmatch.compat.LrtacticalCompat;
+import com.ptcrys.fpsmatch.compat.gun.GunCompatManager;
+import com.ptcrys.fpsmatch.compat.impl.FPSMImpl;
 import com.ptcrys.fpsmatch.core.FPSMCore;
 import com.ptcrys.fpsmatch.core.capability.CapabilityMap;
 import com.ptcrys.fpsmatch.core.capability.map.MapCapability;
@@ -24,6 +28,7 @@ import com.ptcrys.fpsmatch.core.persistence.FPSMDataManager;
 import com.ptcrys.fpsmatch.core.team.MapTeams;
 import com.ptcrys.fpsmatch.core.team.ServerTeam;
 import com.ptcrys.fpsmatch.core.team.TeamData;
+import com.ptcrys.fpsmatch.util.FPSMUtil;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
@@ -37,11 +42,8 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.GameType;
 import net.minecraft.world.scores.Team;
 import net.minecraftforge.fml.common.Mod;
-import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
 
 import java.util.*;
-import java.util.function.Function;
 
 @Mod.EventBusSubscriber(modid = BlockOffensive.MODID,bus = Mod.EventBusSubscriber.Bus.FORGE)
 public class CSDeathMatchMap extends CSMap {
@@ -69,12 +71,8 @@ public class CSDeathMatchMap extends CSMap {
     private Setting<Boolean> isTDM;
     private Setting<Integer> matchTimeLimit;
     private Setting<Integer> spawnProtectionTime;
-    private boolean deathmatchTeamsInitialized;
 
-    private static final String LEGACY_PLAYER_TEAM_PREFIX = "player_";
-    private static final int DEATHMATCH_SHOP_MONEY = 16000;
-    private static final int DEATHMATCH_SHOP_CLOSE_TIME = Integer.MAX_VALUE / 20;
-    private int nextTeamIndex = 6; // 下一个动态队伍编号
+    private static final int DEATHMATCH_SHOP_MONEY = -1;
     
     // 游戏状态
     private int currentMatchTime = 0;
@@ -93,16 +91,13 @@ public class CSDeathMatchMap extends CSMap {
      */
     public CSDeathMatchMap(ServerLevel serverLevel, String mapName, AreaData areaData) {
         super(serverLevel, mapName, areaData, MAP_CAPABILITIES, TEAM_CAPABILITIES);
-        ensureDeathmatchTeams();
-        deathmatchTeamsInitialized = true;
+        applyDeathmatchTeamRules();
     }
 
     private CSDeathMatchMap(String mapName, AreaData areaData, ResourceLocation serverLevel, Map<String, JsonElement> capabilities, Map<String, CapabilityMap.Wrapper> teams) {
         this(FPSMCore.getInstance().getServer().getLevel(ResourceKey.create(Registries.DIMENSION,serverLevel)), mapName, areaData);
         this.getCapabilityMap().write(capabilities);
-        this.getMapTeams().writeData(teams);
-        // 恢复nextTeamIndex，避免与已有的动态队伍编号冲突
-        restoreNextTeamIndex();
+        this.getMapTeams().writeData(filterPersistentTeamData(teams));
     }
 
     @Override
@@ -114,9 +109,8 @@ public class CSDeathMatchMap extends CSMap {
     @Override
     public void setup() {
         isTDM = this.addSetting(new DeathmatchModeSetting());
-        matchTimeLimit = this.addSetting("match", "matchTimeLimit", 18000);
-        // 重生保护时长（秒）：参照 CS2 死斗约 3~5 秒
-        spawnProtectionTime = this.addSetting("player", "spawnProtectionTime", 5);
+        matchTimeLimit = this.addSetting("match", "matchTimeLimit", 12000);
+        spawnProtectionTime = this.addSetting("player", "spawnProtectionTime", 6);
         // 死斗模式默认关闭敌方发光
         getEnemyGlowSetting().set(false);
     }
@@ -146,8 +140,18 @@ public class CSDeathMatchMap extends CSMap {
     public ServerTeam addTeam(TeamData data){
         ServerTeam team = super.addTeam(data);
         team.getPlayerTeam().setAllowFriendlyFire(!isTDM());
-        team.getCapabilityMap().get(ShopCapability.class).ifPresent(cap -> cap.initialize("cs", 16000));
+        team.getCapabilityMap().get(ShopCapability.class).ifPresent(cap -> cap.initialize("cs", DEATHMATCH_SHOP_MONEY));
         return team;
+    }
+
+    @Override
+    public int getCTLimit() {
+        return CSDMTeamSemantics.TEAM_CAPACITY;
+    }
+
+    @Override
+    public int getTLimit() {
+        return CSDMTeamSemantics.TEAM_CAPACITY;
     }
 
     @Override
@@ -157,7 +161,6 @@ public class CSDeathMatchMap extends CSMap {
 
     @Override
     public MapTeams.JoinTeamResult join(String teamName, ServerPlayer player){
-        ensureDeathmatchTeams();
         String targetTeamName = deathmatchTeamNames().contains(teamName) ? teamName
                 : selectDeathmatchTeamName(player.getUUID()).orElse(null);
         if (targetTeamName == null) {
@@ -168,7 +171,7 @@ public class CSDeathMatchMap extends CSMap {
             getMapTeams().getTeamByPlayer(player).ifPresent(team -> {
                 this.playerData.put(player.getUUID(), new DMPlayerData(player.getUUID()));
                 if(isStart){
-                    respawnPlayer(player);
+                    respawnPlayer(player, true);
                 }
             });
         }
@@ -182,15 +185,8 @@ public class CSDeathMatchMap extends CSMap {
 
     @Override
     public void leave(ServerPlayer player){
-        // 先获取玩家所在的数字队伍
-        Optional<ServerTeam> dmTeam = getMapTeams().getTeamByPlayer(player)
-                .filter(team -> isDeathmatchTeamName(team.getName()));
-
         super.leave(player);
         this.playerData.remove(player.getUUID());
-
-        // 离开后检查该数字队伍是否为空，空则销毁
-        dmTeam.ifPresent(this::cleanupEmptyDeathmatchTeam);
     }
     
     @Override
@@ -204,7 +200,7 @@ public class CSDeathMatchMap extends CSMap {
         this.isStart = true;
         this.currentMatchTime = matchTimeLimit.get();
         this.resetAllPlayerData();
-        this.applyDeathmatchFriendlyFireRule();
+        this.applyDeathmatchTeamRules();
         
         if (!this.setTeamSpawnPoints()) {
             this.reset();
@@ -264,10 +260,7 @@ public class CSDeathMatchMap extends CSMap {
         this.isError = false;
         this.isStart = false;
         this.currentMatchTime = 0;
-        this.nextTeamIndex = 6;
         this.getMapTeams().getJoinedPlayers().forEach(data-> data.getPlayer().ifPresent(this::resetPlayerClientData));
-        cleanupLegacyPlayerTeams();
-        cleanupDynamicDeathmatchTeams();
         this.getMapTeams().reset();
     }
 
@@ -290,6 +283,9 @@ public class CSDeathMatchMap extends CSMap {
                 player.setGameMode(GameType.ADVENTURE);
                 this.clearInventory(player);
                 this.givePlayerKits(player);
+                giveFullArmor(player);
+                this.playerData.computeIfAbsent(player.getUUID(), DMPlayerData::new)
+                        .respawn(this.getServerLevel().getGameTime());
         });
     });
     }
@@ -297,7 +293,7 @@ public class CSDeathMatchMap extends CSMap {
     @Override
     public void tick() {
         super.tick();
-        applyDeathmatchFriendlyFireRule();
+        applyDeathmatchTeamRules();
     }
 
     @Override
@@ -330,6 +326,10 @@ public class CSDeathMatchMap extends CSMap {
     }
 
     public void respawnPlayer(ServerPlayer player) {
+        respawnPlayer(player, false);
+    }
+
+    private void respawnPlayer(ServerPlayer player, boolean resetLoadout) {
         // 对局未在进行（已结束/重置）时不重生，避免胜利结算瞬间死亡被传回出生点
         if (!this.isStart) {
             return;
@@ -347,8 +347,13 @@ public class CSDeathMatchMap extends CSMap {
         }
 
         this.getMapTeams().getPlayerData(player).ifPresent(data -> data.setLiving(true));
-        this.clearInventory(player);
-        givePlayerKits(player);
+        if (resetLoadout) {
+            this.clearInventory(player);
+            givePlayerKits(player);
+        } else {
+            FPSMUtil.getAllPlayerItems(player).forEach(FPSMUtil::fixGunItem);
+        }
+        giveFullArmor(player);
 
         this.getMapTeams().getTeamByPlayer(player).flatMap(ShopCapability::getShop).ifPresent(shop -> {
             shop.getDefaultAndPutData(player.getUUID(), false).lockShopSlots(player);
@@ -357,6 +362,10 @@ public class CSDeathMatchMap extends CSMap {
         
         // 给予重生保护（以服务器游戏时间计时，跟随游戏节奏而非墙钟）
         getDMPlayerData(player.getUUID()).ifPresent(d -> d.respawn(this.getServerLevel().getGameTime()));
+    }
+
+    private static void giveFullArmor(ServerPlayer player) {
+        BulletproofArmorAttribute.addPlayer(player, new BulletproofArmorAttribute(true));
     }
     
     public SpawnPointData getRandomSpawnPoint() {
@@ -474,7 +483,7 @@ public class CSDeathMatchMap extends CSMap {
     
     @Override
     public boolean getPlayerCanOpenShop(ShopCapability cap, ServerPlayer player) {
-        return true;
+        return isStart && isInSpawnProtection(player.getUUID());
     }
     
     @Override
@@ -484,7 +493,7 @@ public class CSDeathMatchMap extends CSMap {
     
     @Override
     public int getShopCloseTime() {
-        return DEATHMATCH_SHOP_CLOSE_TIME;
+        return spawnProtectionTime.get();
     }
 
     @Override
@@ -496,7 +505,16 @@ public class CSDeathMatchMap extends CSMap {
     @Override
     public void syncShopInfo(ServerTeam team, ServerPlayer player, boolean enable, int closeTime) {
         ShopCapability.setPlayerMoney(this, player.getUUID(), DEATHMATCH_SHOP_MONEY);
-        super.syncShopInfo(team, player, true, DEATHMATCH_SHOP_CLOSE_TIME);
+        boolean canOpen = isStart && isInSpawnProtection(player.getUUID());
+        super.syncShopInfo(team, player, canOpen, remainingSpawnProtectionSeconds(player.getUUID()));
+    }
+
+    private int remainingSpawnProtectionSeconds(UUID playerId) {
+        return getDMPlayerData(playerId).map(data -> {
+            long elapsed = this.getServerLevel().getGameTime() - data.lastProtectionTick;
+            long remainingTicks = Math.max(0L, spawnProtectionTime.get() * 20L - elapsed);
+            return (int) ((remainingTicks + 19L) / 20L);
+        }).orElse(0);
     }
     
     @Override
@@ -525,6 +543,16 @@ public class CSDeathMatchMap extends CSMap {
     public void handlePlayerFire(UUID uuid) {
         this.getDMPlayerData(uuid).ifPresent(DMPlayerData::setFired);
     }
+
+    public void replenishAmmoReserve(ServerPlayer player) {
+        ItemStack weapon = player.getMainHandItem();
+        if (!GunCompatManager.isGun(weapon)) return;
+        var provider = GunCompatManager.findProvider(weapon);
+        int reserve = provider.getMaxDummyAmmo(weapon);
+        if (reserve > 0) {
+            provider.setDummyAmmo(weapon, reserve);
+        }
+    }
     
     /**
      * 处理玩家移动事件，取消重生保护
@@ -546,6 +574,19 @@ public class CSDeathMatchMap extends CSMap {
 
     public boolean isTDM() {
         return isTDM != null && Boolean.TRUE.equals(isTDM.get());
+    }
+
+    public int getDeathmatchKillScore(ItemStack weapon) {
+        if (FPSMImpl.findLrtacticalMod() && LrtacticalCompat.isKnife(weapon)) {
+            return 25;
+        }
+        if (GunCompatManager.isGun(weapon)) {
+            ResourceLocation gunId = GunCompatManager.findProvider(weapon).getGunId(weapon);
+            if (gunId != null) {
+                return CSDMScoring.scoreForWeaponPath(gunId.getPath());
+            }
+        }
+        return 10;
     }
 
     private static Boolean parseDeathmatchMode(String value) {
@@ -639,50 +680,12 @@ public class CSDeathMatchMap extends CSMap {
         }
 
         private void reconcileAfterModeChange() {
-            if (deathmatchTeamsInitialized) {
-                ensureDeathmatchTeams();
-            }
+            applyDeathmatchTeamRules();
         }
     }
 
     private List<String> deathmatchTeamNames() {
-        return isTDM() ? CSDMTeamSemantics.tdmTeamPool() : CSDMTeamSemantics.ffaBaseTeamPool();
-    }
-
-    private boolean isDeathmatchTeamName(String teamName) {
-        if (deathmatchTeamNames().contains(teamName)) {
-            return true;
-        }
-        // 动态创建的数字队伍也是死斗队伍
-        try {
-            int num = Integer.parseInt(teamName);
-            return num > 0;
-        } catch (NumberFormatException e) {
-            return false;
-        }
-    }
-
-    private void ensureDeathmatchTeams() {
-        for (String teamName : deathmatchTeamNames()) {
-            Optional<ServerTeam> current = getMapTeams().getTeamByName(teamName);
-            Optional<CapabilityMap.Wrapper> preservedData = Optional.empty();
-            if (current.filter(team -> team.getPlayerLimit() != CSDMTeamSemantics.teamCapacity(isTDM())
-                    && team.isEmpty()).isPresent()) {
-                ServerTeam team = current.orElseThrow();
-                preservedData = Optional.of(team.getCapabilityMap().getData());
-                getMapTeams().delTeam(team.getPlayerTeam());
-                current = Optional.empty();
-            }
-            if (current.isEmpty()) {
-                ServerTeam replacement = addTeam(TeamData.of(teamName, CSDMTeamSemantics.teamCapacity(isTDM()), TEAM_CAPABILITIES));
-                if (preservedData.isPresent()) {
-                    replacement.getCapabilityMap().write(preservedData.orElseThrow());
-                } else {
-                    copyDeathmatchTeamTemplate(replacement);
-                }
-            }
-        }
-        applyDeathmatchFriendlyFireRule();
+        return CSDMTeamSemantics.teamPool();
     }
 
     private Optional<String> selectDeathmatchTeamName(UUID playerId) {
@@ -693,118 +696,53 @@ public class CSDeathMatchMap extends CSMap {
             return Optional.of(currentTeam.get().getName());
         }
 
-        // 查找所有数字队伍中人数最少的
-        Optional<ServerTeam> bestTeam = getMapTeams().getNormalTeams().stream()
-                .filter(team -> isTDM() ? teamNames.contains(team.getName()) : isDeathmatchTeamName(team.getName()))
-                .filter(team -> team.getPlayerCount() < CSDMTeamSemantics.teamCapacity(isTDM()))
+        return getMapTeams().getNormalTeams().stream()
+                .filter(team -> teamNames.contains(team.getName()))
                 .filter(team -> team.getPlayerLimit() == -1 || team.getPlayerCount() < team.getPlayerLimit())
                 .min(Comparator
                         .comparingInt(ServerTeam::getPlayerCount)
-                        .thenComparingInt(team -> Integer.parseInt(team.getName())));
-
-        if (bestTeam.isPresent()) {
-            return Optional.of(bestTeam.get().getName());
-        }
-
-        if (isTDM()) {
-            return Optional.empty();
-        }
-
-        // 所有队伍都满了，创建一个新的数字队伍
-        return Optional.of(createNewDeathmatchTeam());
-    }
-
-    /**
-     * 创建一个新的数字队伍并返回其名称
-     */
-    private String createNewDeathmatchTeam() {
-        String newName = String.valueOf(nextTeamIndex);
-        // 确保名称不与现有队伍冲突
-        while (getMapTeams().getTeamByName(newName).isPresent()) {
-            nextTeamIndex++;
-            newName = String.valueOf(nextTeamIndex);
-        }
-        ServerTeam team = addTeam(TeamData.of(newName, CSDMTeamSemantics.teamCapacity(isTDM()), TEAM_CAPABILITIES));
-        copyDeathmatchTeamTemplate(team);
-        applyDeathmatchFriendlyFireRule();
-        nextTeamIndex++;
-        return newName;
-    }
-
-    /**
-     * 清理空的数字队伍（非初始5个队伍的动态队伍会被销毁）
-     */
-    private void cleanupEmptyDeathmatchTeam(ServerTeam team) {
-        if (!isDeathmatchTeamName(team.getName())) {
-            return;
-        }
-        if (!team.isEmpty()) {
-            return;
-        }
-        // 初始5个队伍保留不销毁，只销毁动态创建的队伍
-        if (deathmatchTeamNames().contains(team.getName())) {
-            return;
-        }
-        getMapTeams().delTeam(team.getPlayerTeam());
-    }
-
-    private void copyDeathmatchTeamTemplate(ServerTeam team) {
-        ServerTeam template = getCT();
-        team.getCapabilityMap().write(template.getCapabilityMap().getData());
-        team.getCapabilityMap().get(ShopCapability.class).ifPresent(cap -> cap.initialize("cs", 16000));
-        team.getPlayerTeam().setAllowFriendlyFire(true);
-    }
-
-    private void cleanupLegacyPlayerTeams() {
-        getMapTeams().getNormalTeams().stream()
-                .filter(team -> team.getName().startsWith(LEGACY_PLAYER_TEAM_PREFIX))
-                .filter(ServerTeam::isEmpty)
-                .map(ServerTeam::getPlayerTeam)
-                .toList()
-                .forEach(getMapTeams()::delTeam);
-    }
-
-    /**
-     * 清理动态创建的数字队伍（重置时调用）
-     */
-    private void cleanupDynamicDeathmatchTeams() {
-        getMapTeams().getNormalTeams().stream()
-                .filter(team -> isDeathmatchTeamName(team.getName()))
-                .filter(team -> !deathmatchTeamNames().contains(team.getName()))
-                .map(ServerTeam::getPlayerTeam)
-                .toList()
-                .forEach(getMapTeams()::delTeam);
-    }
-
-    /**
-     * 从现有队伍中恢复nextTeamIndex，确保新创建的队伍不会与已有队伍冲突
-     */
-    private void restoreNextTeamIndex() {
-        int maxIndex = 5; // 初始队伍最大为5
-        for (ServerTeam team : getMapTeams().getNormalTeams()) {
-            if (isDeathmatchTeamName(team.getName())) {
-                try {
-                    int num = Integer.parseInt(team.getName());
-                    if (num > maxIndex) {
-                        maxIndex = num;
-                    }
-                } catch (NumberFormatException ignored) {
-                }
-            }
-        }
-        this.nextTeamIndex = maxIndex + 1;
+                        .thenComparing(ServerTeam::getName))
+                .map(ServerTeam::getName);
     }
 
     private static Map<String, CapabilityMap.Wrapper> getPersistentTeamData(CSDeathMatchMap map) {
-        Map<String, CapabilityMap.Wrapper> data = new HashMap<>(map.getMapTeams().getData());
-        data.keySet().removeIf(name -> name.startsWith(LEGACY_PLAYER_TEAM_PREFIX));
-        return data;
+        return filterPersistentTeamData(map.getMapTeams().getData());
     }
 
-    private void applyDeathmatchFriendlyFireRule() {
+    private static Map<String, CapabilityMap.Wrapper> filterPersistentTeamData(Map<String, CapabilityMap.Wrapper> source) {
+        Set<String> supportedTeams = new HashSet<>(CSDMTeamSemantics.teamPool());
+        supportedTeams.add(CSDMTeamSemantics.SPECTATOR);
+        Map<String, CapabilityMap.Wrapper> filtered = new HashMap<>();
+        source.forEach((name, data) -> {
+            if (supportedTeams.contains(name)) {
+                filtered.put(name, data);
+            }
+        });
+        return filtered;
+    }
+
+    @Override
+    public boolean areCombatTeammates(Player first, Player second, ServerTeam firstTeam, ServerTeam secondTeam) {
+        return CSDMTeamSemantics.areTeammates(
+                isTDM(),
+                firstTeam.getName(),
+                secondTeam.getName(),
+                first.isSpectator(),
+                second.isSpectator()
+        );
+    }
+
+    @Override
+    public void creditAssist(PlayerData playerData) {
+        super.creditAssist(playerData);
+        playerData.addScore(5);
+    }
+
+    private void applyDeathmatchTeamRules() {
         boolean allowFriendlyFire = !isTDM();
         for (ServerTeam team : this.getMapTeams().getNormalTeams()) {
             team.getPlayerTeam().setAllowFriendlyFire(allowFriendlyFire);
+            team.getPlayerTeam().setCollisionRule(Team.CollisionRule.NEVER);
         }
     }
 

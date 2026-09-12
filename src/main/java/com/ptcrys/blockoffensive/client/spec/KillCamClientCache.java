@@ -29,5 +29,12 @@ public final class KillCamClientCache {
 
     public static ItemStack getWeapon()   { return weapon == null ? ItemStack.EMPTY : weapon; }
 
+    public static void clear() {
+        killerPos = victimPos = null;
+        killerUUID = null;
+        killerName = null;
+        weapon = ItemStack.EMPTY;
+    }
+
     private KillCamClientCache() {}
 }
