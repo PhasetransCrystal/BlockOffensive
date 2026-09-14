@@ -12,6 +12,7 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.PlayerFaceRenderer;
 import net.minecraft.client.multiplayer.PlayerInfo;
 import net.minecraft.network.chat.Component;
+import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.world.entity.player.Player;
 
 import java.util.*;
@@ -63,6 +64,53 @@ public class CSDMOverlay {
                 textRoundTimeColor,
                 false);
         guiGraphics.pose().popPose();
+
+        renderMatchStatus(guiGraphics, font, layout);
+    }
+
+    private void renderMatchStatus(
+            GuiGraphics guiGraphics,
+            Font font,
+            CSHudSafeAreaLayouts.CsdmScoreboardLayout layout
+    ) {
+        LocalPlayer local = minecraft.player;
+        if (local == null) return;
+
+        Component status = respawnProtectionText();
+        if (status == null) {
+            List<PlayerInfo> ranked = rankedPlayers();
+            int selfIndex = -1;
+            int leaderScore = 0;
+            int ownScore = 0;
+            for (int i = 0; i < ranked.size(); i++) {
+                PlayerInfo player = ranked.get(i);
+                int score = getPlayerScore(player);
+                if (i == 0) leaderScore = score;
+                if (player.getProfile().getId().equals(local.getUUID())) {
+                    selfIndex = i;
+                    ownScore = score;
+                }
+            }
+            if (selfIndex < 0) return;
+            int deficit = Math.max(0, leaderScore - ownScore);
+            status = Component.translatable("blockoffensive.hud.csdm.standing",
+                    selfIndex + 1, ownScore, deficit);
+        }
+
+        float scale = Math.max(0.65F, layout.scale() * 0.72F);
+        int x = layout.centerX();
+        int y = layout.startY() + layout.timeBarHeight() - font.lineHeight - 1;
+        guiGraphics.pose().pushPose();
+        guiGraphics.pose().translate(x, y, 0);
+        guiGraphics.pose().scale(scale, scale, 1.0F);
+        guiGraphics.drawString(font, status, -font.width(status) / 2, 0,
+                respawnProtectionText() != null ? 0xFF8EE6A1 : 0xFFE7EDF2, false);
+        guiGraphics.pose().popPose();
+    }
+
+    private Component respawnProtectionText() {
+        if (!CSClientData.canOpenShop || CSClientData.shopCloseTime <= 0) return null;
+        return Component.translatable("blockoffensive.hud.csdm.spawn_protection", CSClientData.shopCloseTime);
     }
 
     private void renderPlayerAvatars(
@@ -74,14 +122,7 @@ public class CSDMOverlay {
         int avatarSize = layout.avatars().avatarSize();
         int scoreBgHeight = layout.scoreBgHeight();
         // 获取所有玩家信息
-        Map<String, List<PlayerInfo>> teamPlayers = RenderUtil.getTeamsPlayerInfo();
-        List<PlayerInfo> allPlayers = new ArrayList<>();
-        for (List<PlayerInfo> players : teamPlayers.values()) {
-            allPlayers.addAll(players);
-        }
-
-        // 按分数从高到低排序
-        allPlayers.sort(Comparator.comparingInt(this::getPlayerScore).reversed());
+        List<PlayerInfo> allPlayers = rankedPlayers();
 
         // 最多显示15个玩家
         int maxPlayers = Math.min(layout.avatars().count(), allPlayers.size());
@@ -139,6 +180,14 @@ public class CSDMOverlay {
 
     private int getPlayerScore(PlayerInfo player) {
         return RenderUtil.getPlayerData(player).map(PlayerData::getScores).orElse(0);
+    }
+
+    private List<PlayerInfo> rankedPlayers() {
+        List<PlayerInfo> allPlayers = new ArrayList<>();
+        RenderUtil.getTeamsPlayerInfo().values().forEach(allPlayers::addAll);
+        allPlayers.sort(Comparator.comparingInt(this::getPlayerScore).reversed()
+                .thenComparing(player -> player.getProfile().getName(), String.CASE_INSENSITIVE_ORDER));
+        return allPlayers;
     }
 
     private Component getRoundTimeString() {

@@ -455,7 +455,8 @@ public final class CSHudSafeAreaLayouts {
         float scale = baseScale(screenWidth, screenHeight);
         int centerX = screenWidth / 2;
         int startY = Math.max(1, px(2, scale));
-        int timeBarHeight = px(13, scale);
+        // The second row communicates the local deathmatch standing or respawn protection.
+        int timeBarHeight = px(23, scale);
         int scoreBgHeight = px(8, scale);
         int timeAreaWidth = px(20, scale);
         int avatarGap = px(16, scale);

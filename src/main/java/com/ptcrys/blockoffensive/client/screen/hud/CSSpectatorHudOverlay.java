@@ -2,6 +2,7 @@ package com.ptcrys.blockoffensive.client.screen.hud;
 
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.ptcrys.blockoffensive.client.spec.SpecHudAPI;
+import com.ptcrys.blockoffensive.client.key.SwitchSpectatorKey;
 import com.ptcrys.fpsmatch.FPSMatch;
 import com.ptcrys.fpsmatch.common.client.FPSMClient;
 import com.ptcrys.fpsmatch.common.client.screen.texture.NamecardResolver;
@@ -189,6 +190,18 @@ public final class CSSpectatorHudOverlay {
                 currentCardLocation, currentCardTexture, currentCardAlpha * visibilityAlpha);
         renderTeamStripes(guiGraphics, panelX, panelY, panelWidth, panelHeight, visibilityAlpha);
         renderPlayerInfo(guiGraphics, minecraft, panelX, panelY, panelWidth, panelHeight, visibilityAlpha);
+        renderControls(guiGraphics, minecraft, panelX, panelY, panelWidth, visibilityAlpha);
+    }
+
+    private void renderControls(GuiGraphics graphics, Minecraft minecraft, int panelX, int panelY,
+                                int panelWidth, float alpha) {
+        String previous = SwitchSpectatorKey.KEY_SPECTATE_PREV.getTranslatedKeyMessage().getString();
+        String next = SwitchSpectatorKey.KEY_SPECTATE_NEXT.getTranslatedKeyMessage().getString();
+        String text = I18n.get("blockoffensive.spectator.controls", previous, next);
+        int color = ((int) (Math.max(0.0F, Math.min(1.0F, alpha)) * 255) << 24) | 0x00C8D2DC;
+        graphics.drawString(minecraft.font, text,
+                panelX + (panelWidth - minecraft.font.width(text)) / 2, panelY - minecraft.font.lineHeight - 3,
+                color, false);
     }
 
     /**
