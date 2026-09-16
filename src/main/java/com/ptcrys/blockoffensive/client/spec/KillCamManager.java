@@ -12,7 +12,10 @@ import com.ptcrys.fpsmatch.common.client.event.FPSMClientResetEvent;
 import com.ptcrys.fpsmatch.common.client.spec.SpectateMode;
 import com.ptcrys.fpsmatch.common.client.spec.SpectateState;
 import com.ptcrys.fpsmatch.common.client.spec.SpectateTarget;
-import com.ptcrys.fpsmatch.mixin.spec.teammate.CameraInvokerMixin;
+import com.ptcrys.fpsmatch.common.client.camera.CameraDirector;
+import com.ptcrys.fpsmatch.common.client.camera.CameraPolicy;
+import com.ptcrys.fpsmatch.common.client.camera.CameraSession;
+import com.ptcrys.fpsmatch.common.camera.CameraEndReason;
 import com.ptcrys.fpsmatch.common.client.spec.SpectatorCameraController;
 import com.ptcrys.fpsmatch.core.team.ClientTeam;
 import com.ptcrys.fpsmatch.util.FPSMFormatUtil;
@@ -29,8 +32,6 @@ import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.client.resources.language.I18n;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
-import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.ClipContext;
@@ -40,7 +41,6 @@ import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.scores.Team;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.client.event.RenderGuiEvent;
-import net.minecraftforge.client.event.ViewportEvent;
 import net.minecraftforge.client.event.ClientPlayerNetworkEvent;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.level.LevelEvent;
@@ -73,17 +73,15 @@ public final class KillCamManager {
     private static final int FAST_GRADIENT_MIN_SEG = 24;
     private static final int FAST_GRADIENT_MAX_SEG = 64;
     private static final DeathCameraTimeline timeline = new DeathCameraTimeline();
-    private static final DeathCamRig rig = new DeathCamRig();
+    private static CameraSession cameraSession;
+    private static CameraSession pendingSession;
     private static boolean pendingStart;
     private static int pendingTicks;
-    private static boolean targetReceived;
-    private static boolean ownsSpectatorState;
     private static int sideResolveCooldown;
     private static boolean iconWanted;
     private static Vec3 deathAnchor;
     private static float deathYaw;
     private static float deathPitch;
-    private static Entity ghostCam;
 
     private static UUID killerId;
     private static String killerName = "???";
@@ -114,7 +112,7 @@ public final class KillCamManager {
     }
 
     public static void startFromPacket() {
-        if (timeline.active()) {
+        if (timeline.active() || !CameraDirector.accepts(CameraDirector.DEATH_PRIORITY)) {
             return;
         }
 
@@ -123,6 +121,18 @@ public final class KillCamManager {
         if (!client.player.isSpectator()) {
             // Do not consume the packet until the game-mode update arrives.
             pendingStart = true;
+            if (pendingSession == null) {
+                var pose = new com.ptcrys.fpsmatch.common.client.camera.CameraPose(
+                        client.player.getEyePosition(), client.player.getYRot(), client.player.getXRot());
+                pendingSession = CameraDirector.play("blockoffensive:death/pending", CameraDirector.DEATH_PRIORITY,
+                        new com.ptcrys.fpsmatch.common.client.camera.rig.FixedRig(pose), CameraPolicy.DEATH,
+                        new com.ptcrys.fpsmatch.common.camera.SequenceClock(), () -> pendingStart,
+                        reason -> {
+                            pendingSession = null;
+                            if (pendingStart) clearPresentation();
+                        });
+                if (pendingSession != null) CameraDirector.prepareFrame(0);
+            }
             return;
         }
         pendingStart = false;
@@ -131,6 +141,7 @@ public final class KillCamManager {
         Vec3 kPos = KillCamClientCache.consumeKiller();
         Vec3 vPos = KillCamClientCache.consumeVictim();
         if (kPos == null || vPos == null) {
+            reset();
             return;
         }
 
@@ -183,24 +194,17 @@ public final class KillCamManager {
         deathAnchor = victimEye;
         deathYaw = mc.player.getYRot();
         deathPitch = mc.player.getXRot();
-        targetReceived = false;
         timeline.start();
-        ownsSpectatorState = true;
-        // ATTACH with no target locks spectator controls without invoking an orbit rig.
-        SpectateState.setTarget(null);
-        SpectateState.set(SpectateMode.ATTACH);
-        SpectatorCameraController.reset();
         double maxPull = Math.min(0.8D, computeWallClampedPullDistance(mc, victimEye, dx, dy, dz));
-        rig.begin(victimEye, killerEye, dx, dy, dz, maxPull, deathYaw, deathPitch);
-
-        ensureGhost();
-        if (ghostCam != null) {
-            Vec3 start = rig.position();
-            ghostCam.moveTo(start.x, start.y, start.z, rig.yawAt(start.x, start.y, start.z), rig.pitchAt(start.x, start.y, start.z));
-            ghostCam.setOldPosAndRot();
-            mc.setCameraEntity(ghostCam);
-            // Camera changes can replace entity post effects; restore ours after the switch.
-            DeathWorldMask.begin();
+        cameraSession = CameraDirector.play("blockoffensive:death", CameraDirector.DEATH_PRIORITY,
+                new com.ptcrys.fpsmatch.common.client.camera.rig.CollisionRig(
+                        new DeathCameraRig(victimEye, new Vec3(dx, dy, dz), maxPull, deathYaw, deathPitch), () -> victimEye, 0.12),
+                CameraPolicy.DEATH, timeline.clock(),
+                () -> mc.player != null && mc.player.isSpectator(), reason -> clearPresentation());
+        if (cameraSession != null) cameraSession.onCameraBound(DeathWorldMask::begin);
+        if (cameraSession == null || !CameraDirector.prepareFrame(0)) {
+            reset();
+            return;
         }
     }
 
@@ -208,12 +212,17 @@ public final class KillCamManager {
     public static void tick(TickEvent.ClientTickEvent e) {
         if (e.phase != TickEvent.Phase.END) return;
         Minecraft mc = Minecraft.getInstance();
+        if (mc.isPaused()) return;
         LocalPlayer pl = mc.player;
         if (pl == null || mc.level == null) {
             reset();
             return;
         }
         if (pendingStart) {
+            if (!CameraDirector.accepts(CameraDirector.DEATH_PRIORITY)) {
+                reset();
+                return;
+            }
             if (pl.isSpectator()) {
                 startFromPacket();
                 return;
@@ -222,7 +231,6 @@ public final class KillCamManager {
             return;
         }
         if (!timeline.active()) {
-            if (ownsSpectatorState && !pl.isSpectator()) resetForLifecycleBoundary();
             return;
         }
         if (!pl.isSpectator()) {
@@ -230,13 +238,9 @@ public final class KillCamManager {
             return;
         }
         if (sideResolveCooldown > 0) --sideResolveCooldown;
-        timeline.tick();
         if (timeline.waitingForTarget()) {
-            // Accept the target as soon as the regular spectator handler has
-            // installed it.  The mixin acknowledgement is an optimization;
-            // the state check also covers packet-handler order on Forge.
-            if ((targetReceived || SpectateState.getTarget() != null) && attachReceivedTarget()) {
-                clearKillCamState(false);
+            if (CameraDirector.spectatorTargetReady()) {
+                finishPresentation();
                 return;
             }
             if (timeline.targetWaitExpired()) {
@@ -244,48 +248,13 @@ public final class KillCamManager {
                 SpectateState.setTarget(new SpectateTarget(SpectateMode.DEATH_SPOT,
                         pl.getId(), deathAnchor, deathYaw, deathPitch, 4.0F));
                 SpectatorCameraController.setAngles(deathYaw, deathPitch);
-                mc.setCameraEntity(pl);
-                clearKillCamState(false);
+                finishPresentation();
                 return;
             }
             if (timeline.shouldRequestTarget()) {
                 BlockOffensive.INSTANCE.sendToServer(new RequestAttachTeammateC2SPacket());
             }
         }
-        ensureGhost();
-        if (ghostCam != null) {
-            if (mc.getCameraEntity() != ghostCam) {
-                mc.setCameraEntity(ghostCam);
-                // Camera changes can replace entity post effects; restore ours after the switch.
-                DeathWorldMask.begin();
-            }
-        }
-    }
-
-    private static boolean attachReceivedTarget() {
-        Minecraft mc = Minecraft.getInstance();
-        SpectateTarget target = SpectateState.getTarget();
-        if (target == null || mc.player == null || mc.level == null) return false;
-        if (target.mode() == SpectateMode.TEAMMATE) {
-            Entity entity = mc.level.getEntity(target.entityId());
-            if (!(entity instanceof Player player) || !player.isAlive() || player.isSpectator()) return false;
-            mc.setCameraEntity(entity);
-            return true;
-        }
-        if (target.mode() == SpectateMode.C4_ORBIT || target.mode() == SpectateMode.DEATH_SPOT) {
-            mc.setCameraEntity(mc.player);
-            return true;
-        }
-        return false;
-    }
-
-    /** Called by the target-packet mixin; stale targets cannot interrupt the presentation. */
-    public static boolean deferSpectatorTarget() {
-        return pendingStart || (timeline.active() && !timeline.waitingForTarget());
-    }
-
-    public static void spectatorTargetReceived() {
-        if (timeline.waitingForTarget()) targetReceived = true;
     }
 
     public static boolean isActive() {
@@ -312,56 +281,6 @@ public final class KillCamManager {
 
     public static float hitVignetteStrength(float partialTick) {
         return timeline.active() ? 1.0F : 0.0F;
-    }
-
-    /** Camera.setup tail: ignores F5 offsets and stale orbit state during death. */
-    public static void applyDeathCamera(net.minecraft.client.Camera camera, float partialTick) {
-        if (!timeline.active()) return;
-        float fall = timeline.fallProgress(partialTick);
-        rig.pull(fall);
-        Vec3 pos = rig.position();
-        float yaw = rig.yawAt(pos.x, pos.y, pos.z);
-        double yawRad = Math.toRadians(yaw);
-        double left = 0.34D * fall;
-        pos = pos.add(-Math.cos(yawRad) * left, -0.85D * fall, -Math.sin(yawRad) * left);
-        float shake = timeline.shakeProgress(partialTick);
-        float t = timeline.elapsed(partialTick);
-        pos = pos.add(Math.sin(t * 31.0F) * 0.045D * shake,
-                Math.cos(t * 37.0F) * 0.035D * shake,
-                Math.sin(t * 27.0F + 0.7F) * 0.045D * shake);
-        CameraInvokerMixin access = (CameraInvokerMixin) camera;
-        access.invokeSetPosition(pos.x, pos.y, pos.z);
-        access.invokeSetRotation(yaw + (float) Math.sin(t * 22.0F) * 1.4F * shake,
-                rig.pitchAt(pos.x, pos.y, pos.z) + (float) Math.cos(t * 25.0F) * 1.2F * shake);
-    }
-
-    @SubscribeEvent(priority = EventPriority.LOWEST)
-    public static void onCamAngles(ViewportEvent.ComputeCameraAngles e) {
-        if (!timeline.active()) return;
-        Vec3 pos = e.getCamera().getPosition();
-        float fall = timeline.fallProgress(0.0F);
-        float shake = timeline.shakeProgress(0.0F);
-        float t = timeline.elapsed(0.0F);
-        e.setYaw(rig.yawAt(pos.x, pos.y, pos.z) + (float) Math.sin(t * 22.0F) * 1.4F * shake);
-        e.setPitch(rig.pitchAt(pos.x, pos.y, pos.z) + (float) Math.cos(t * 25.0F) * 1.2F * shake);
-        e.setRoll(-12.0F * fall + (float) Math.sin(t * 29.0F) * 1.8F * shake);
-    }
-
-    @SubscribeEvent
-    public static void onMovement(net.minecraftforge.client.event.MovementInputUpdateEvent e) {
-        if (!isActive()) return;
-        var input = e.getInput();
-        input.forwardImpulse = 0;
-        input.leftImpulse = 0;
-        input.up = input.down = input.left = input.right = false;
-        input.jumping = input.shiftKeyDown = false;
-    }
-
-    @SubscribeEvent
-    public static void onInteraction(net.minecraftforge.client.event.InputEvent.InteractionKeyMappingTriggered e) {
-        if (!isActive()) return;
-        e.setSwingHand(false);
-        e.setCanceled(true);
     }
 
     @SubscribeEvent(priority = EventPriority.LOWEST)
@@ -410,12 +329,6 @@ public final class KillCamManager {
     }
 
     public static void resetForLifecycleBoundary() {
-        if (ownsSpectatorState || isActive()) {
-            forceRestoreCameraToPlayer();
-            SpectateState.set(SpectateMode.FREE);
-            SpectatorCameraController.reset();
-        }
-        ownsSpectatorState = false;
         reset();
     }
 
@@ -704,48 +617,30 @@ public final class KillCamManager {
         return 1.0F + c3 * u * u * u + c1 * u * u;
     }
 
-    private static void ensureGhost() {
-        Minecraft mc = Minecraft.getInstance();
-        if (mc.level == null) {
-            return;
-        }
-
-        if (ghostCam == null || ghostCam.level() != mc.level || ghostCam.isRemoved()) {
-            Entity g = EntityType.MARKER.create(mc.level);
-            if (g == null) {
-                g = EntityType.ARMOR_STAND.create(mc.level);
-            }
-            ghostCam = g;
-        }
-    }
-
-    private static void forceRestoreCameraToPlayer() {
-        Minecraft mc = Minecraft.getInstance();
-        LocalPlayer p = mc.player;
-        if (p == null) {
-            return;
-        }
-        if (mc.getCameraEntity() != p) {
-            mc.setCameraEntity(p);
-        }
+    private static void finishPresentation() {
+        CameraSession session = cameraSession;
+        cameraSession = null;
+        if (session != null) session.stop(CameraEndReason.COMPLETED);
+        else clearPresentation();
     }
 
     private static void reset() {
-        clearKillCamState(true);
+        CameraSession session = cameraSession;
+        CameraSession pending = pendingSession;
+        cameraSession = null;
+        pendingSession = null;
+        pendingStart = false;
+        if (session != null) session.close();
+        if (pending != null) pending.close();
+        clearPresentation();
     }
 
-    private static void clearKillCamState(boolean restoreCamera) {
+    private static void clearPresentation() {
+        cameraSession = null;
         DeathWorldMask.close();
-        if (restoreCamera && isActive()) {
-            forceRestoreCameraToPlayer();
-            SpectateState.set(SpectateMode.FREE);
-            SpectatorCameraController.reset();
-            ownsSpectatorState = false;
-        }
         timeline.reset();
         pendingStart = false;
         pendingTicks = 0;
-        targetReceived = false;
         killerId = null;
         killerName = "???";
         gunStack = ItemStack.EMPTY;
@@ -754,97 +649,7 @@ public final class KillCamManager {
         iconWanted = false;
         hudText = "";
         hudTextWidth = 0;
-        rig.reset();
-        ghostCam = null;
         KillCamClientCache.clear();
-    }
-
-    private KillCamManager() {
-    }
-
-    /**
-     * 死亡镜头相机运动模型。
-     * <p>集中管理死亡镜头的空间数学：起点(受害者眼位)、视线目标(杀手眼位)、
-     * 归一化拉远方向、方块截断后的最大拉远距离、每 tick 的拉远缓动推进，
-     * 以及基于帧间插值位置的平滑朝向。把相机"怎么动"与 {@link KillCamManager}
-     * 的"何时切相位/画 HUD"解耦，提升可读性与可调性。</p>
-     */
-    static final class DeathCamRig {
-        private double victimX;
-        private double victimY;
-        private double victimZ;
-        private double targetX;
-        private double targetY;
-        private double targetZ;
-        private double dirX;
-        private double dirY;
-        private double dirZ;
-        private double maxPull;
-        private double posX;
-        private double posY;
-        private double posZ;
-        private double prevX;
-        private double prevY;
-        private double prevZ;
-        private float baseYaw;
-        private float basePitch;
-        private boolean active;
-
-        void begin(Vec3 victim, Vec3 killer, double dirX, double dirY, double dirZ, double maxPull,
-                   float baseYaw, float basePitch) {
-            this.victimX = victim.x;
-            this.victimY = victim.y;
-            this.victimZ = victim.z;
-            this.targetX = killer.x;
-            this.targetY = killer.y;
-            this.targetZ = killer.z;
-            this.dirX = dirX;
-            this.dirY = dirY;
-            this.dirZ = dirZ;
-            this.maxPull = maxPull;
-            this.baseYaw = baseYaw;
-            this.basePitch = basePitch;
-            this.posX = victimX;
-            this.posY = victimY;
-            this.posZ = victimZ;
-            this.prevX = victimX;
-            this.prevY = victimY;
-            this.prevZ = victimZ;
-            this.active = true;
-        }
-
-        /** 按缓动进度推进本 tick 相机位置（s = 缓动后的 0~1）。 */
-        void pull(double easedProgress) {
-            this.prevX = posX;
-            this.prevY = posY;
-            this.prevZ = posZ;
-            this.posX = victimX + dirX * maxPull * easedProgress;
-            this.posY = victimY + dirY * maxPull * easedProgress;
-            this.posZ = victimZ + dirZ * maxPull * easedProgress;
-        }
-
-        /** 当前 tick 相机位置（喂给 ghostCam，原版会做帧间插值）。 */
-        Vec3 position() {
-            return new Vec3(posX, posY, posZ);
-        }
-
-        /** 从指定位置看向视线目标(杀手)的偏航角。 */
-        float yawAt(double fromX, double fromY, double fromZ) {
-            return baseYaw;
-        }
-
-        /** 从指定位置看向视线目标(杀手)的俯仰角。 */
-        float pitchAt(double fromX, double fromY, double fromZ) {
-            return basePitch;
-        }
-
-        boolean active() {
-            return active;
-        }
-
-        void reset() {
-            active = false;
-        }
     }
 
     private enum Side {

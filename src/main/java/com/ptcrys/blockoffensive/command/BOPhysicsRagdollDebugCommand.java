@@ -1,7 +1,6 @@
 package com.ptcrys.blockoffensive.command;
 
 import com.mojang.authlib.GameProfile;
-import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
@@ -50,10 +49,6 @@ public final class BOPhysicsRagdollDebugCommand {
     private static final Map<UUID, RagdollTestRun> RUNS = new HashMap<>();
 
     private BOPhysicsRagdollDebugCommand() {
-    }
-
-    public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
-        dispatcher.register(command("bo_physics_ragdoll_test"));
     }
 
     public static LiteralArgumentBuilder<CommandSourceStack> fpsmCommand() {

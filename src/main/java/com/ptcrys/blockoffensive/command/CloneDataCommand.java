@@ -57,6 +57,8 @@ final class CloneDataCommand {
     static void registerHelp() {
         FPSMHelpManager help = FPSMHelpManager.getInstance();
         help.registerCommandHelp("fpsm clonedata", Component.translatable("commands.blockoffensive.clonedata.description"));
+        help.registerCommandHelp("fpsm clonedata cs shopdata", "commands.blockoffensive.help.clone_shop");
+        help.registerCommandHelp("fpsm clonedata cs gamedata", "commands.blockoffensive.help.clone_game");
         help.registerCommandParameters("fpsm clonedata", "*cs", "*source_map", "*shopdata|gamedata", "*target_map");
     }
 

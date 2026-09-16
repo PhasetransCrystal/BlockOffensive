@@ -15,8 +15,6 @@
     "StepSoundMixin"
   ],
   "client": [
-    "client.DeathCameraMixin",
-    "client.DeathSpectatorTargetMixin",
     "client.DeathWorldRenderMixin",
     "client.PostChainAccessor",
     "client.PostPassAccessor",
@@ -24,7 +22,10 @@
     "client.ShopPreviewPoseMixin",
     "client.C4ItemOutlineMixin",
     "client.SoundEngineChannelAccessor",
-    "client.SoundManagerAccessor"
+    "client.SoundManagerAccessor",
+    "client.ClientPacketListenerAccessor",
+    "client.PlayerInfoInvoker",
+    "tacz.IntroTaczAnimationManagerMixin"
   ],
   "injectors": {
     "defaultRequire": 1

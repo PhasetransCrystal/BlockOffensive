@@ -294,6 +294,22 @@
       "blockoffensive:voice_throwable_grenade_ct_throw_04"
     ]
   },
+  "intro.ct": {
+    "sounds": [
+      {
+        "name": "blockoffensive:intro/ct",
+        "stream": false
+      }
+    ]
+  },
+  "intro.t": {
+    "sounds": [
+      {
+        "name": "blockoffensive:intro/t",
+        "stream": false
+      }
+    ]
+  },
   "ct_roundstart": {
     "subtitle": "sounds.blockoffensive.ct.roundstart",
     "sounds": [

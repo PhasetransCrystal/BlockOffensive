@@ -38,7 +38,7 @@ public class SwitchSpectatorKey {
             return;
         }
 
-        if (mc.screen != null || com.ptcrys.blockoffensive.client.spec.KillCamManager.isActive()) return;
+        if (mc.screen != null || !com.ptcrys.fpsmatch.common.client.camera.CameraDirector.policy().allowSpectatorSwitch()) return;
         Entity camera = mc.getCameraEntity();
         if (!(camera instanceof Player teammate) || teammate == player || !teammate.isAlive() || teammate.isSpectator()) {
             return;

@@ -1,0 +1,460 @@
+{
+  "version": 3,
+  "name": "intro_switch",
+  "author": "MCS2 original",
+  "description": "Original CS2-style Minecraft side-switch regroup with turn-in and low-ready settle; no Valve assets.",
+  "emote": {
+    "beginTick": 0,
+    "endTick": 140,
+    "stopTick": 140,
+    "degrees": true,
+    "isLoop": false,
+    "returnTick": 0,
+    "moves": [
+      {
+        "tick": 0,
+        "easing": "easeInOutSine",
+        "body": {
+          "y": -0.146,
+          "z": -0.008
+        },
+        "torso": {
+          "pitch": 10.73,
+          "yaw": -6.732,
+          "roll": -1.632,
+          "bend": 3.6,
+          "axis": 0,
+          "bendDirection": 0
+        },
+        "head": {
+          "pitch": -4.216,
+          "yaw": 4.06,
+          "roll": 0.348
+        },
+        "rightLeg": {
+          "pitch": 18.768,
+          "yaw": 5.52,
+          "roll": 3.496,
+          "bend": 36.696,
+          "axis": 0,
+          "bendDirection": 0
+        },
+        "leftLeg": {
+          "pitch": -21.252,
+          "yaw": -5.52,
+          "roll": -3.864,
+          "bend": 39.864,
+          "axis": 0,
+          "bendDirection": 0
+        }
+      },
+      {
+        "tick": 7,
+        "easing": "easeInOutSine",
+        "body": {
+          "y": -0.184,
+          "z": -0.033
+        },
+        "torso": {
+          "pitch": 12.21,
+          "yaw": -4.624,
+          "roll": -1.292,
+          "bend": 5.616,
+          "axis": 0,
+          "bendDirection": 0
+        },
+        "head": {
+          "pitch": -4.402,
+          "yaw": 3.248,
+          "roll": 0.232
+        },
+        "rightLeg": {
+          "pitch": 8.74,
+          "yaw": 4.416,
+          "roll": 2.668,
+          "bend": 29.216,
+          "axis": 0,
+          "bendDirection": 0
+        },
+        "leftLeg": {
+          "pitch": -7.544,
+          "yaw": -5.152,
+          "roll": -2.668,
+          "bend": 29.656,
+          "axis": 0,
+          "bendDirection": 0
+        }
+      },
+      {
+        "tick": 16,
+        "easing": "easeInOutSine",
+        "body": {
+          "y": -0.166,
+          "z": -0.066
+        },
+        "torso": {
+          "pitch": 11.396,
+          "yaw": -1.972,
+          "roll": -0.68,
+          "bend": 4.464,
+          "axis": 0,
+          "bendDirection": 0
+        },
+        "head": {
+          "pitch": -4.464,
+          "yaw": 0.638,
+          "roll": 0.0
+        },
+        "rightLeg": {
+          "pitch": -13.8,
+          "yaw": 1.84,
+          "roll": 1.196,
+          "bend": 34.232,
+          "axis": 0,
+          "bendDirection": 0
+        },
+        "leftLeg": {
+          "pitch": 16.284,
+          "yaw": -1.84,
+          "roll": -1.196,
+          "bend": 31.328,
+          "axis": 0,
+          "bendDirection": 0
+        }
+      },
+      {
+        "tick": 28,
+        "easing": "easeInOutSine",
+        "body": {
+          "y": -0.184,
+          "z": -0.041
+        },
+        "torso": {
+          "pitch": 12.358,
+          "yaw": 2.788,
+          "roll": 1.292,
+          "bend": 5.76,
+          "axis": 0,
+          "bendDirection": 0
+        },
+        "head": {
+          "pitch": -4.154,
+          "yaw": -3.248,
+          "roll": -0.232
+        },
+        "rightLeg": {
+          "pitch": 26.864,
+          "yaw": -2.208,
+          "roll": -1.932,
+          "bend": 37.664,
+          "axis": 0,
+          "bendDirection": 0
+        },
+        "leftLeg": {
+          "pitch": -25.668,
+          "yaw": 2.576,
+          "roll": 1.932,
+          "bend": 42.24,
+          "axis": 0,
+          "bendDirection": 0
+        }
+      },
+      {
+        "tick": 40,
+        "easing": "easeInOutSine",
+        "body": {
+          "y": -0.176,
+          "z": -0.016
+        },
+        "torso": {
+          "pitch": 11.544,
+          "yaw": 3.4,
+          "roll": 1.156,
+          "bend": 4.68,
+          "axis": 0,
+          "bendDirection": 0
+        },
+        "head": {
+          "pitch": -4.34,
+          "yaw": -1.798,
+          "roll": -0.116
+        },
+        "rightLeg": {
+          "pitch": 6.9,
+          "yaw": -1.104,
+          "roll": -0.736,
+          "bend": 25.542,
+          "axis": 0,
+          "bendDirection": 0
+        },
+        "leftLeg": {
+          "pitch": -7.544,
+          "yaw": 1.104,
+          "roll": 0.736,
+          "bend": 27.456,
+          "axis": 0,
+          "bendDirection": 0
+        }
+      },
+      {
+        "tick": 52,
+        "easing": "easeInOutSine",
+        "body": {
+          "y": -0.176,
+          "z": -0.066
+        },
+        "torso": {
+          "pitch": 11.618,
+          "yaw": 0.952,
+          "roll": 0.476,
+          "bend": 4.824,
+          "axis": 0,
+          "bendDirection": 0
+        },
+        "head": {
+          "pitch": -4.03,
+          "yaw": 1.45,
+          "roll": 0.116
+        },
+        "rightLeg": {
+          "pitch": -18.768,
+          "yaw": 0.736,
+          "roll": 0.736,
+          "bend": 36.08,
+          "axis": 0,
+          "bendDirection": 0
+        },
+        "leftLeg": {
+          "pitch": 21.252,
+          "yaw": -0.736,
+          "roll": -0.736,
+          "bend": 33.528,
+          "axis": 0,
+          "bendDirection": 0
+        }
+      },
+      {
+        "tick": 64,
+        "easing": "easeInOutSine",
+        "body": {
+          "y": -0.184,
+          "z": -0.041
+        },
+        "torso": {
+          "pitch": 12.358,
+          "yaw": -1.088,
+          "roll": -0.476,
+          "bend": 5.76,
+          "axis": 0,
+          "bendDirection": 0
+        },
+        "head": {
+          "pitch": -4.216,
+          "yaw": 0.522,
+          "roll": 0.0
+        },
+        "rightLeg": {
+          "pitch": -6.256,
+          "yaw": 0.0,
+          "roll": 0.0,
+          "bend": 24.854,
+          "axis": 0,
+          "bendDirection": 0
+        },
+        "leftLeg": {
+          "pitch": 7.544,
+          "yaw": 0.0,
+          "roll": 0.0,
+          "bend": 24.338,
+          "axis": 0,
+          "bendDirection": 0
+        }
+      },
+      {
+        "tick": 78,
+        "easing": "easeInOutSine",
+        "body": {
+          "y": -0.176,
+          "z": -0.016
+        },
+        "torso": {
+          "pitch": 11.766,
+          "yaw": 0.476,
+          "roll": 0.136,
+          "bend": 4.968,
+          "axis": 0,
+          "bendDirection": 0
+        },
+        "head": {
+          "pitch": -4.03,
+          "yaw": -0.406,
+          "roll": 0.0
+        },
+        "rightLeg": {
+          "pitch": 6.256,
+          "yaw": 0.0,
+          "roll": 0.0,
+          "bend": 23.306,
+          "axis": 0,
+          "bendDirection": 0
+        },
+        "leftLeg": {
+          "pitch": -5.612,
+          "yaw": 0.0,
+          "roll": 0.0,
+          "bend": 23.22,
+          "axis": 0,
+          "bendDirection": 0
+        }
+      },
+      {
+        "tick": 94,
+        "easing": "easeInOutSine",
+        "body": {
+          "y": -0.156,
+          "z": -0.066
+        },
+        "torso": {
+          "pitch": 11.174,
+          "yaw": 0.136,
+          "roll": 0.0,
+          "bend": 4.176,
+          "axis": 0,
+          "bendDirection": 0
+        },
+        "head": {
+          "pitch": -3.968,
+          "yaw": 0.116,
+          "roll": 0.0
+        },
+        "rightLeg": {
+          "pitch": 2.484,
+          "yaw": 0.0,
+          "roll": 0.0,
+          "bend": 19.608,
+          "axis": 0,
+          "bendDirection": 0
+        },
+        "leftLeg": {
+          "pitch": -2.484,
+          "yaw": 0.0,
+          "roll": 0.0,
+          "bend": 19.608,
+          "axis": 0,
+          "bendDirection": 0
+        }
+      },
+      {
+        "tick": 112,
+        "easing": "easeInOutSine",
+        "body": {
+          "y": -0.156,
+          "z": -0.016
+        },
+        "torso": {
+          "pitch": 11.026,
+          "yaw": 0.0,
+          "roll": 0.0,
+          "bend": 3.96,
+          "axis": 0,
+          "bendDirection": 0
+        },
+        "head": {
+          "pitch": -3.844,
+          "yaw": 0.0,
+          "roll": 0.0
+        },
+        "rightLeg": {
+          "pitch": 1.288,
+          "yaw": 0.0,
+          "roll": 0.0,
+          "bend": 16.004,
+          "axis": 0,
+          "bendDirection": 0
+        },
+        "leftLeg": {
+          "pitch": -1.288,
+          "yaw": 0.0,
+          "roll": 0.0,
+          "bend": 16.004,
+          "axis": 0,
+          "bendDirection": 0
+        }
+      },
+      {
+        "tick": 126,
+        "easing": "easeInOutSine",
+        "body": {
+          "y": -0.166,
+          "z": -0.057
+        },
+        "torso": {
+          "pitch": 9.99,
+          "yaw": 0.0,
+          "roll": 0.0,
+          "bend": 3.528,
+          "axis": 0,
+          "bendDirection": 0
+        },
+        "head": {
+          "pitch": -3.1,
+          "yaw": 0.0,
+          "roll": 0.0
+        },
+        "rightLeg": {
+          "pitch": 0.368,
+          "yaw": 0.0,
+          "roll": 0.0,
+          "bend": 14.37,
+          "axis": 0,
+          "bendDirection": 0
+        },
+        "leftLeg": {
+          "pitch": -0.368,
+          "yaw": 0.0,
+          "roll": 0.0,
+          "bend": 14.37,
+          "axis": 0,
+          "bendDirection": 0
+        }
+      },
+      {
+        "tick": 140,
+        "easing": "easeInOutSine",
+        "body": {
+          "y": -0.166,
+          "z": -0.041
+        },
+        "torso": {
+          "pitch": 8.51,
+          "yaw": 0.0,
+          "roll": 0.0,
+          "bend": 2.376,
+          "axis": 0,
+          "bendDirection": 0
+        },
+        "head": {
+          "pitch": -2.356,
+          "yaw": 0.0,
+          "roll": 0.0
+        },
+        "rightLeg": {
+          "pitch": 0.0,
+          "yaw": 0.0,
+          "roll": 0.0,
+          "bend": 13.5,
+          "axis": 0,
+          "bendDirection": 0
+        },
+        "leftLeg": {
+          "pitch": 0.0,
+          "yaw": 0.0,
+          "roll": 0.0,
+          "bend": 13.5,
+          "axis": 0,
+          "bendDirection": 0
+        }
+      }
+    ]
+  }
+}

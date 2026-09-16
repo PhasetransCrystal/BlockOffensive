@@ -20,6 +20,8 @@ import com.ptcrys.blockoffensive.net.spec.SpectatorRosterS2CPacket;
 import com.ptcrys.blockoffensive.net.spec.SwitchSpectateC2SPacket;
 import com.ptcrys.blockoffensive.net.vote.VoteCastC2SPacket;
 import com.ptcrys.blockoffensive.net.vote.VoteSyncS2CPacket;
+import com.ptcrys.blockoffensive.intro.net.IntroClientDoneC2SPacket;
+import com.ptcrys.blockoffensive.intro.net.IntroSequenceS2CPacket;
 import com.ptcrys.fpsmatch.common.packet.register.NetworkPacketRegister;
 import net.minecraftforge.network.NetworkDirection;
 
@@ -28,7 +30,7 @@ import java.util.function.BiConsumer;
 
 /** Single source of truth for the BO channel discriminator order. */
 public final class BOPacketRegistration {
-    public static final String PROTOCOL_VERSION = "1.4.2";
+    public static final String PROTOCOL_VERSION = "1.6.0";
 
     public enum Direction {
         DEFAULT,
@@ -113,5 +115,7 @@ public final class BOPacketRegistration {
         registrar.register(ShopDropPickupResultS2CPacket.class, Direction.PLAY_TO_CLIENT);
         registrar.register(ShopNearbyDropsS2CPacket.class, Direction.PLAY_TO_CLIENT);
         registrar.register(CSScoreboardSync.class, Direction.PLAY_TO_CLIENT);
+        registrar.register(IntroSequenceS2CPacket.class, Direction.PLAY_TO_CLIENT);
+        registrar.register(IntroClientDoneC2SPacket.class, Direction.PLAY_TO_SERVER);
     }
 }

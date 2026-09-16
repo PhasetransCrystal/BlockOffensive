@@ -12,6 +12,7 @@ import com.ptcrys.blockoffensive.event.CSGamePlayerGetMvpEvent;
 import com.ptcrys.blockoffensive.event.CSGameRoundEndEvent;
 import com.ptcrys.blockoffensive.entity.CompositionC4Entity;
 import com.ptcrys.blockoffensive.item.BOItemRegister;
+import com.ptcrys.blockoffensive.intro.IntroRuntimeController;
 import com.ptcrys.blockoffensive.item.BombDisposalKit;
 import com.ptcrys.blockoffensive.item.CompositionC4;
 import com.ptcrys.blockoffensive.map.team.capability.ColoredPlayerCapability;
@@ -1210,6 +1211,7 @@ public class CSGameMap extends CSMap{
             syncShopDataToClient();
             syncNormalRoundStartMessage();
             this.rebuildRoundLifecycle();
+            IntroRuntimeController.triggerPendingSwitch(this);
         }
     }
 
@@ -1732,6 +1734,7 @@ public class CSGameMap extends CSMap{
         // 换边前关闭商店，防止换边后显示错误阵营的商店界面
         syncShopInfo(false, 0);
         super.switchTeams();
+        IntroRuntimeController.markSwitchPending(this);
         scoreboardHistory.switchSides();
         MinecraftForge.EVENT_BUS.post(new CSGameMapEvent.TeamSwitchEvent(this));
     }

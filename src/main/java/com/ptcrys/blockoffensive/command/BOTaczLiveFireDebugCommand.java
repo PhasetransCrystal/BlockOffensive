@@ -1,7 +1,6 @@
 package com.ptcrys.blockoffensive.command;
 
 import com.mojang.authlib.GameProfile;
-import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
@@ -68,10 +67,6 @@ public final class BOTaczLiveFireDebugCommand {
     private static final Map<UUID, LiveFireTestRun> RUNS = new HashMap<>();
 
     private BOTaczLiveFireDebugCommand() {
-    }
-
-    public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
-        dispatcher.register(command("bo_tacz_live_fire_test"));
     }
 
     public static LiteralArgumentBuilder<CommandSourceStack> fpsmCommand() {

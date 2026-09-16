@@ -1,12 +1,13 @@
 package com.ptcrys.blockoffensive;
 
 import com.ptcrys.blockoffensive.command.CSCommand;
-import com.ptcrys.blockoffensive.command.BOCommandRegister;
+import net.minecraftforge.event.RegisterCommandsEvent;
 import com.ptcrys.blockoffensive.compat.BOImpl;
 import com.ptcrys.blockoffensive.compat.CSGrenadeCompat;
 import com.ptcrys.blockoffensive.compat.PhysicsModCompat;
 import com.ptcrys.blockoffensive.entity.BOEntityRegister;
 import com.ptcrys.blockoffensive.item.BOItemRegister;
+import com.ptcrys.blockoffensive.intro.IntroSoundEvents;
 import com.ptcrys.blockoffensive.map.team.capability.ColoredPlayerCapability;
 import com.ptcrys.blockoffensive.net.*;
 import com.ptcrys.blockoffensive.net.bomb.BombActionC2SPacket;
@@ -31,7 +32,6 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.common.MinecraftForge;
-import net.minecraftforge.event.RegisterCommandsEvent;
 import net.minecraftforge.eventbus.api.IEventBus;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.DistExecutor;
@@ -68,13 +68,13 @@ public class BlockOffensive {
         BOItemRegister.TABS.register(modEventBus);
         BOEntityRegister.ENTITY_TYPES.register(modEventBus);
         BOSoundRegister.SOUNDS.register(modEventBus);
+        IntroSoundEvents.SOUND_EVENTS.register(modEventBus);
         context.registerConfig(ModConfig.Type.CLIENT, BOConfig.clientSpec);
         context.registerConfig(ModConfig.Type.COMMON, BOConfig.commonSpec);
     }
 
     @SubscribeEvent
     public void onRegisterCommands(RegisterCommandsEvent event) {
-        BOCommandRegister.onRegisterCommands(event);
         CSCommand.onRegisterCommands(event);
     }
 

@@ -12,6 +12,7 @@ import com.ptcrys.blockoffensive.client.key.DismantleBombKey;
 import com.ptcrys.blockoffensive.client.key.MvpMusicKey;
 import com.ptcrys.blockoffensive.client.key.OpenShopKey;
 import com.ptcrys.blockoffensive.client.key.RadioKey;
+import com.ptcrys.blockoffensive.intro.client.IntroClientController;
 import net.minecraft.Optionull;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.PlayerInfo;
@@ -21,6 +22,7 @@ import net.minecraftforge.client.event.EntityRenderersEvent;
 import net.minecraftforge.client.event.RegisterKeyMappingsEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
+import net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -66,5 +68,10 @@ public class BOClientBootstrap {
             return Minecraft.getInstance().player.connection.getListedOnlinePlayers().stream().sorted(PLAYER_COMPARATOR).limit(80L).toList();
         }
         return new ArrayList<>();
+    }
+
+    @SubscribeEvent
+    public static void onClientSetup(FMLClientSetupEvent event) {
+        event.enqueueWork(IntroClientController::registerClient);
     }
 }

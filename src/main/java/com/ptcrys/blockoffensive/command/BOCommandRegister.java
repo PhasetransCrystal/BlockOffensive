@@ -5,6 +5,7 @@ import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import com.ptcrys.blockoffensive.BlockOffensive;
 import com.ptcrys.blockoffensive.data.DeathMessage;
+import com.ptcrys.blockoffensive.intro.IntroCommand;
 import com.ptcrys.blockoffensive.net.DeathMessageS2CPacket;
 import com.ptcrys.blockoffensive.sound.MVPMusicManager;
 import com.ptcrys.fpsmatch.common.command.FPSMHelpManager;
@@ -19,7 +20,6 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
-import net.minecraftforge.event.RegisterCommandsEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.loading.FMLEnvironment;
@@ -31,19 +31,9 @@ import java.util.UUID;
 @Mod.EventBusSubscriber(bus = Mod.EventBusSubscriber.Bus.FORGE, modid = BlockOffensive.MODID)
 public class BOCommandRegister {
 
-    public static void onRegisterCommands(RegisterCommandsEvent event) {
-        if (!FMLEnvironment.production) {
-            BOTaczLiveFireDebugCommand.register(event.getDispatcher());
-            BOPhysicsRagdollDebugCommand.register(event.getDispatcher());
-            event.getDispatcher().register(Commands.literal("bo_debug_death_icons")
-                    .executes(BOCommandRegister::handleDebugDeathIconsSelf)
-                    .then(Commands.argument("targets", EntityArgument.players())
-                            .executes(BOCommandRegister::handleDebugDeathIcons)));
-        }
-    }
-
     @SubscribeEvent
     public static void onFPSMCommandRegister(RegisterFPSMCommandEvent event) {
+        CSCommand.register(event);
         event.addChild(Commands.literal("mvp")
                 .then(Commands.argument("targets", EntityArgument.players())
                         .then(Commands.argument("sound", ResourceLocationArgument.id())
@@ -57,7 +47,18 @@ public class BOCommandRegister {
         event.addChild(CloneDataCommand.build());
         CloneDataCommand.registerHelp();
 
+        event.addChild(Commands.literal("blockoffensive")
+                .then(IntroCommand.build()));
+        event.registerHelp("fpsm blockoffensive", "commands.blockoffensive.help.root");
+        IntroCommand.registerHelp(event);
+
         if (!FMLEnvironment.production) {
+            for (String prefix : new String[]{"fpsm ", "fpsm debug "}) {
+                event.registerHelp(prefix + "tacz_live_fire_test", "commands.blockoffensive.help.live_fire");
+                event.registerHelp(prefix + "physics_ragdoll_test", "commands.blockoffensive.help.ragdoll");
+            }
+            event.registerHelp("fpsm debug_death_icons", "commands.blockoffensive.help.death_icons");
+            event.registerHelp("fpsm debug death_icons", "commands.blockoffensive.help.death_icons");
             event.addChild(BOTaczLiveFireDebugCommand.fpsmCommand());
             event.addChild(BOPhysicsRagdollDebugCommand.fpsmCommand());
             event.addChild(Commands.literal("debug_death_icons")
@@ -65,6 +66,15 @@ public class BOCommandRegister {
                     .executes(BOCommandRegister::handleDebugDeathIconsSelf)
                     .then(Commands.argument("targets", EntityArgument.players())
                             .executes(BOCommandRegister::handleDebugDeathIcons)));
+
+            event.addChild(Commands.literal("debug")
+                    .then(BOTaczLiveFireDebugCommand.fpsmCommand())
+                    .then(BOPhysicsRagdollDebugCommand.fpsmCommand())
+                    .then(Commands.literal("death_icons")
+                            .requires(source -> source.hasPermission(2))
+                            .executes(BOCommandRegister::handleDebugDeathIconsSelf)
+                            .then(Commands.argument("targets", EntityArgument.players())
+                                    .executes(BOCommandRegister::handleDebugDeathIcons))));
         }
     }
 

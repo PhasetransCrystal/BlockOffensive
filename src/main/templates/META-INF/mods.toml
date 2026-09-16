@@ -37,3 +37,17 @@ mandatory=true
 versionRange="[3.12.0.1,)"
 ordering="AFTER"
 side="CLIENT"
+
+[[dependencies."${mod_id}"]]
+modId="playeranimator"
+mandatory=false
+versionRange="[1.0.2-rc1,)"
+ordering="AFTER"
+side="CLIENT"
+
+[[dependencies."${mod_id}"]]
+modId="bendylib"
+mandatory=false
+versionRange="[4.0.0,)"
+ordering="AFTER"
+side="CLIENT"
