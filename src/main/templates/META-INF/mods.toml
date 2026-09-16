@@ -25,13 +25,6 @@ ordering = "NONE"
 side = "BOTH"
 
 [[dependencies."${mod_id}"]]
-modId="modernui"
-mandatory=true
-versionRange="[3.11.0,)"
-ordering="NONE"
-side="BOTH"
-
-[[dependencies."${mod_id}"]]
 modId="fpsmatch"
 mandatory=true
 versionRange="${fpsm_version_range}"
@@ -39,8 +32,8 @@ ordering="NONE"
 side="BOTH"
 
 [[dependencies."${mod_id}"]]
-modId="ldlib2"
+modId="modernui"
 mandatory=true
-versionRange="${ldlib2_version_range}"
+versionRange="[3.12.0.1,)"
 ordering="AFTER"
-side="BOTH"
+side="CLIENT"

@@ -5,6 +5,7 @@ import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 import com.ptcrys.blockoffensive.BOConfig;
 import com.ptcrys.blockoffensive.BlockOffensive;
+import com.ptcrys.blockoffensive.data.CSScoreboardHistory;
 import com.ptcrys.blockoffensive.data.MvpReason;
 import com.ptcrys.blockoffensive.event.CSGameMapEvent;
 import com.ptcrys.blockoffensive.event.CSGamePlayerGetMvpEvent;
@@ -18,6 +19,7 @@ import com.ptcrys.blockoffensive.mvp.CSMvpContribution;
 import com.ptcrys.blockoffensive.mvp.CSMvpResult;
 import com.ptcrys.blockoffensive.mvp.CSMvpScorer;
 import com.ptcrys.blockoffensive.net.CSGameSettingsS2CPacket;
+import com.ptcrys.blockoffensive.net.CSScoreboardSync;
 import com.ptcrys.blockoffensive.net.CSTabRemovalS2CPacket;
 import com.ptcrys.blockoffensive.net.PxRagdollRemovalCompatS2CPacket;
 import com.ptcrys.blockoffensive.net.bomb.BombDemolitionProgressS2CPacket;
@@ -100,6 +102,7 @@ import java.util.function.Function;
  */
 @Mod.EventBusSubscriber(modid = BlockOffensive.MODID,bus = Mod.EventBusSubscriber.Bus.FORGE)
 public class CSGameMap extends CSMap{
+    private final CSScoreboardHistory scoreboardHistory = new CSScoreboardHistory();
     public static final String TYPE = "cs";
     /**
      * Codec序列化配置（用于地图数据保存/加载）
@@ -369,6 +372,9 @@ public class CSGameMap extends CSMap{
         }
     }
 
+    @Override
+    protected boolean shouldCountMatchTime() { return isStart && !isWarmTime; }
+
     private void syncPauseTimeWithLifecycle() {
         RoundPhase phase = roundLifecycle.phase();
         if (phase == RoundPhase.WAITING || phase == RoundPhase.ROUND_END_WAITING) {
@@ -446,6 +452,8 @@ public class CSGameMap extends CSMap{
      * 重置游戏核心状态（加时、计数、等待状态等）
      */
     public void resetGameCoreState() {
+        scoreboardHistory.reset();
+        resetMatchClock();
         this.isOvertime = false;
         this.overCount = 0;
         this.isWaitingOverTimeVote = false;
@@ -765,6 +773,12 @@ public class CSGameMap extends CSMap{
         MapTeams mapTeams = getMapTeams();
         isWaitingWinner = true;
         lastWinnerReason = reason;
+        scoreboardHistory.add(isCtWinner(winnerTeam), switch (reason) {
+            case TIME_OUT -> CSScoreboardHistory.TIMEOUT;
+            case DEFUSE_BOMB -> CSScoreboardHistory.DEFUSE;
+            case DETONATE_BOMB -> CSScoreboardHistory.EXPLOSION;
+            default -> CSScoreboardHistory.ELIMINATION;
+        });
 
         MvpReason mvpReason = processMvpLogic(winnerTeam, reason, mapTeams);
 
@@ -1567,6 +1581,8 @@ public class CSGameMap extends CSMap{
     private void processJoinedPlayer(PlayerData data, ServerPlayer player, boolean shouldSwitchTeams, Component teamSwitchTitle) {
         player.heal(player.getMaxHealth());
         player.setGameMode(GameType.ADVENTURE);
+        // Changing vanilla game mode does not release FPSMatch's orbit camera.
+        BOSpecManager.resetSpectating(player);
 
         if (shouldSwitchTeams) {
             clearInventory(player);
@@ -1683,6 +1699,8 @@ public class CSGameMap extends CSMap{
     @Override
     public void reset() {
         super.reset();
+        scoreboardHistory.reset();
+        resetMatchClock();
         MapTeams mapTeams = this.getMapTeams();
         this.isOvertime = false;
         this.isWaitingOverTimeVote = false;
@@ -1714,6 +1732,7 @@ public class CSGameMap extends CSMap{
         // 换边前关闭商店，防止换边后显示错误阵营的商店界面
         syncShopInfo(false, 0);
         super.switchTeams();
+        scoreboardHistory.switchSides();
         MinecraftForge.EVENT_BUS.post(new CSGameMapEvent.TeamSwitchEvent(this));
     }
 
@@ -1771,6 +1790,21 @@ public class CSGameMap extends CSMap{
     public void syncToClient() {
         super.syncToClient();
         this.syncToClient(true);
+    }
+
+    @Override
+    public void syncToClient(boolean syncWeapon) {
+        super.syncToClient(syncWeapon);
+        // A full snapshot once per second also catches late joiners without per-viewer bookkeeping.
+        if (getServerLevel().getGameTime() % 20 != 0) return;
+        int[] rounds = scoreboardHistory.snapshot();
+        var ctCompensation = getCompensation(getCT());
+        var tCompensation = getCompensation(getT());
+        int ctLoss = ctCompensation == null ? 0 : ctCompensation.getFactor();
+        int tLoss = tCompensation == null ? 0 : tCompensation.getFactor();
+        getMapTeams().getJoinedPlayersWithSpec().forEach(uuid -> getPlayerByUUID(uuid).ifPresent(player ->
+                CSScoreboardSync.send(player, getMapName(), rounds,
+                        Math.max(1, winnerRound.get() - 1), getElapsedMatchSeconds(), ctLoss, tLoss)));
     }
 
     @Override

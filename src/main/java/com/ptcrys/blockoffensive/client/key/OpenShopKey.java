@@ -4,7 +4,7 @@ import com.mojang.blaze3d.platform.InputConstants;
 import com.ptcrys.blockoffensive.client.data.CSClientData;
 import com.ptcrys.blockoffensive.client.screen.CSGameShopScreen;
 import com.ptcrys.fpsmatch.common.client.FPSMClient;
-import icyllis.modernui.mc.forge.MuiForgeApi;
+
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
@@ -62,6 +62,6 @@ public class OpenShopKey {
     }
 
     private static void openShop(){
-        MuiForgeApi.openScreen(CSGameShopScreen.getInstance());
+        Minecraft.getInstance().setScreen(CSGameShopScreen.getInstance());
     }
 }

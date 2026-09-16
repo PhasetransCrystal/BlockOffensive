@@ -2,7 +2,7 @@ package com.ptcrys.blockoffensive.net.shop;
 
 import com.ptcrys.blockoffensive.client.data.CSClientData;
 import com.ptcrys.blockoffensive.client.screen.CSGameShopScreen;
-import icyllis.modernui.mc.MuiScreen;
+
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraftforge.network.NetworkEvent;
@@ -41,7 +41,7 @@ public class ShopStatesS2CPacket {
 
             if (wasOpen && !this.canOpenShop && Minecraft.getInstance().player != null) {
                 Minecraft mc = Minecraft.getInstance();
-                if (mc.screen instanceof MuiScreen muiScreen && muiScreen.getFragment() instanceof CSGameShopScreen) {
+                if (mc.screen instanceof CSGameShopScreen) {
                     mc.setScreen(null);
                 }
             }

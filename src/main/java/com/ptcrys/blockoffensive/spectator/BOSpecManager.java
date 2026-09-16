@@ -14,6 +14,7 @@ import com.ptcrys.fpsmatch.common.client.spec.SpectatorSwitchDirection;
 import com.ptcrys.fpsmatch.common.client.spec.SpectatorSwitchInputEvent;
 import com.ptcrys.fpsmatch.common.entity.MatchDropEntity;
 import com.ptcrys.fpsmatch.common.packet.spec.SpectatorTargetS2CPacket;
+import com.ptcrys.fpsmatch.common.packet.spec.SpectateModeS2CPacket;
 import com.ptcrys.fpsmatch.core.FPSMCore;
 import com.ptcrys.fpsmatch.core.map.BaseMap;
 import com.ptcrys.fpsmatch.core.team.ServerTeam;
@@ -58,6 +59,22 @@ public final class BOSpecManager {
     private static final Map<UUID, Long> ATTACH_AFTER_TICK = new ConcurrentHashMap<>();
 
     private BOSpecManager() {
+    }
+
+    /** End the old session synchronously; team switches may never tick in adventure mode. */
+    public static void resetSpectating(ServerPlayer player) {
+        clearSpectatorState(player.getUUID());
+        player.setCamera(player);
+        FPSMatch.sendToPlayer(player, new SpectateModeS2CPacket(SpectateMode.FREE));
+    }
+
+    private static void clearSpectatorState(UUID id) {
+        MODES.remove(id);
+        TARGET_ENTITY_IDS.remove(id);
+        ATTACH_AFTER_TICK.remove(id);
+        LAST_KILLCAM_NS.remove(id);
+        DEATH_CONTEXTS.remove(id);
+        DamagePosTracker.clearDeathPose(id);
     }
 
     public static void startSpectating(ServerPlayer spectator) {
@@ -132,12 +149,7 @@ public final class BOSpecManager {
         if (!(event.player instanceof ServerPlayer spectator)) return;
         UUID id = spectator.getUUID();
         if (!spectator.isSpectator()) {
-            MODES.remove(id);
-            TARGET_ENTITY_IDS.remove(id);
-            ATTACH_AFTER_TICK.remove(id);
-            LAST_KILLCAM_NS.remove(id);
-            DEATH_CONTEXTS.remove(id);
-            DamagePosTracker.clearDeathPose(id);
+            clearSpectatorState(id);
             return;
         }
         // 击杀回放窗口内不自动接管相机，避免附着包抢先触发打断回放

@@ -11,6 +11,12 @@ public class CSClientData {
     public static boolean currentMapSupportShop = true;
     public static int cTWinnerRounds = 0;
     public static int tWinnerRounds = 0;
+    public static int[] scoreboardRounds = new int[0];
+    public static int scoreboardHalfRounds = 12;
+    public static int scoreboardElapsedSeconds = 0;
+    public static int scoreboardCtLoss = 0;
+    public static int scoreboardTLoss = 0;
+    public static boolean scoreboardAdvanced = false;
     public static int time = 0;
     public static boolean isDebug = false;
     public static boolean isStart = false;
@@ -71,6 +77,12 @@ public class CSClientData {
         CSGameHud.getInstance().reset();
         cTWinnerRounds = 0;
         tWinnerRounds = 0;
+        scoreboardRounds = new int[0];
+        scoreboardHalfRounds = 12;
+        scoreboardElapsedSeconds = 0;
+        scoreboardCtLoss = 0;
+        scoreboardTLoss = 0;
+        scoreboardAdvanced = false;
         time = 0;
         isDebug = false;
         isStart = false;

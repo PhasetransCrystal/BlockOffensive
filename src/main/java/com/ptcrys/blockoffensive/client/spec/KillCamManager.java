@@ -8,6 +8,7 @@ import com.ptcrys.blockoffensive.BlockOffensive;
 import com.ptcrys.blockoffensive.net.spec.RequestAttachTeammateC2SPacket;
 import com.ptcrys.fpsmatch.common.client.FPSMClient;
 import com.ptcrys.fpsmatch.common.client.data.FPSMClientGlobalData;
+import com.ptcrys.fpsmatch.common.client.event.FPSMClientResetEvent;
 import com.ptcrys.fpsmatch.common.client.spec.SpectateMode;
 import com.ptcrys.fpsmatch.common.client.spec.SpectateState;
 import com.ptcrys.fpsmatch.common.client.spec.SpectateTarget;
@@ -387,6 +388,13 @@ public final class KillCamManager {
             int width = i == 5 ? 6 : 4;
             gg.fill(x - width / 2, y - 2, x + width / 2 + 1, y + 2, color);
         }
+    }
+
+    @SubscribeEvent
+    public static void onMatchReset(FPSMClientResetEvent event) {
+        // Leave/rejoin can finish between client ticks without ever observing
+        // a non-spectator player. Cancel the old presentation before new targets arrive.
+        resetForLifecycleBoundary();
     }
 
     @SubscribeEvent

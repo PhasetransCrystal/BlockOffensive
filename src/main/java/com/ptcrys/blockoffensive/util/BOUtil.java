@@ -119,10 +119,7 @@ public class BOUtil {
     public static int getColor(UUID uuid){
        return FPSMClient.getGlobalData().getTeamByUUID(uuid)
                .map(team-> team.getCapabilityMap().get(ColoredPlayerCapability.class)
-                       .map(cap-> {
-                           TeamPlayerColor color = cap.getColor(uuid);
-                           return color == null ? RenderUtil.WHITE :  color.getRGBA();
-                       }).orElse(RenderUtil.WHITE))
+                       .map(cap -> cap.getPlayerColor(uuid)).orElse(RenderUtil.WHITE))
                .orElse(RenderUtil.WHITE);
     }
 
@@ -135,9 +132,9 @@ public class BOUtil {
         MutableComponent teamColor = Component.literal(" • ");
 
         team.getCapabilityMap().get(ColoredPlayerCapability.class).ifPresent(cap -> {
-            TeamPlayerColor c = cap.getColor(player.getUUID());
-            if (c != null) {
-                teamColor.withStyle(Style.EMPTY.withColor(TextColor.parseColor(c.getHex())));
+            int c = cap.getPlayerColor(player.getUUID());
+            if (c != RenderUtil.WHITE) {
+                teamColor.withStyle(Style.EMPTY.withColor(TextColor.fromRgb(c & 0xFFFFFF)));
             }
         });
 
@@ -165,9 +162,9 @@ public class BOUtil {
             MutableComponent teamColor = Component.literal(" • ");
 
             team.getCapabilityMap().get(ColoredPlayerCapability.class).ifPresent(cap -> {
-                TeamPlayerColor c = cap.getColor(player.getUUID());
-                if (c != null) {
-                    teamColor.withStyle(Style.EMPTY.withColor(TextColor.parseColor(c.getHex())));
+                int c = cap.getPlayerColor(player.getUUID());
+                if (c != RenderUtil.WHITE) {
+                    teamColor.withStyle(Style.EMPTY.withColor(TextColor.fromRgb(c & 0xFFFFFF)));
                 }
             });
 

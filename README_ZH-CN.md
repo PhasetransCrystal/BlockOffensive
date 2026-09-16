@@ -16,20 +16,22 @@
 | 目标玩法 | C4 放置、爆炸、拆弹工具与目标回合胜负判定 |
 | 战斗反馈 | 击杀反馈、死亡信息、爆头反馈、HUD、Overlay、TAB、队伍标记与旁观提示 |
 | 地图房间 | 浏览地图、加入房间、选择队伍、准备，以及可选的地图缩略图/详情背景 |
-| 兼容集成 | 必需 FPSMatch、Modern UI、LDLib2；兼容 TaCZ 及相关 Forge 玩法模组 |
+| 兼容集成 | 必需 FPSMatch、Modern UI，客户端另需 Modern UI；兼容 TaCZ 及相关 Forge 玩法模组 |
 | 指令帮助 | 游戏内可通过 `/fpsm help` 查看指令帮助 |
 
 服主和地图作者可查阅随项目提供的 [FPSMatch Wiki](FPSMatch/WIKI.md)，其中包括地图创建、安全出生点、比赛中编辑锁、数据保存和[缩略图/地图图标教程](FPSMatch/WIKI.md#地图缩略图与图标填写教程)。地图 ID 长度为 1-48，仅允许小写 `a-z`、数字 `0-9`、`_`、`-`；地图和出生点工具需要 OP 2 级权限。
+
+当前工作区客户端需要 Modern UI **1.20.1-3.12.0.1**。地图浏览、房间子页面、商店配置和装备购买界面使用原生 Modern UI 控件；文字由 Modern UI 字体引擎处理。专用服务器不要求安装 Modern UI。
 
 ## 版本兼容矩阵
 
 带 `*` 的列为必须依赖，未标注的模组列为兼容集成项。`1.3.0` 行表示当前源码工作区快照，并不代表已确认存在公开发布产物。
 
-| BlockOffensive | 分发来源 | Minecraft* | Forge* | FPSMatch* | Modern UI* | LDLib2* | TaCZ | LR Tactical | CounterStrikeGrenade | KubeJS | Physics Mod | Hit Indication | GD656 Kill Icon | TaCZ Tweaks |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1.3.0 | GitHub 工作区快照 | 1.20.1 | 47.4.10 | 1.3.0+ | 3.12.0.1 | 2.2.27+1.20.1 | 1.1.7-hotfix | 0.4.3 | 1.20.1-1.5.2 | 2001.6.5-build.14 | 3.0.14 | 1.20.1-1.4 | 1.0.8-1.20.1-forge | 2.11.2 |
-| 1.2.5.1 | Modrinth / CurseForge | 1.20.1 | 47.4.6 | 1.2.5 | 3.11.1.6 | - | 1.1.6-hotfix | 0.3.0 | 1.2.8 | - | 3.0.14 | 1.20.1-1.4 | 0.4.2-1.20.1 | - |
-| 1.2.5 | Modrinth | 1.20.1 | 47.4.6 | 1.2.5 | 3.11.1.6 | - | 1.1.6-hotfix | 0.3.0 | 1.2.8 | - | 3.0.14 | 1.20.1-1.4 | 0.4.2-1.20.1 | - |
+| BlockOffensive | 分发来源 | Minecraft* | Forge* | FPSMatch* | Modern UI* | TaCZ | LR Tactical | CounterStrikeGrenade | KubeJS | Physics Mod | Hit Indication | GD656 Kill Icon | TaCZ Tweaks |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1.3.0 | GitHub 工作区快照 | 1.20.1 | 47.4.10 | 1.3.0+ | 2.2.27+1.20.1 | 1.1.7-hotfix | 0.4.3 | 1.20.1-1.5.2 | 2001.6.5-build.14 | 3.0.14 | 1.20.1-1.4 | 1.0.8-1.20.1-forge | 2.11.2 |
+| 1.2.5.1 | Modrinth / CurseForge | 1.20.1 | 47.4.6 | 1.2.5 | - | 1.1.6-hotfix | 0.3.0 | 1.2.8 | - | 3.0.14 | 1.20.1-1.4 | 0.4.2-1.20.1 | - |
+| 1.2.5 | Modrinth | 1.20.1 | 47.4.6 | 1.2.5 | - | 1.1.6-hotfix | 0.3.0 | 1.2.8 | - | 3.0.14 | 1.20.1-1.4 | 0.4.2-1.20.1 | - |
 
 TaCZ、CounterStrikeGrenade、LR Tactical、KubeJS 及其他未标注的条目属于可选集成，并非 BlockOffensive 元数据声明的硬依赖；按服务器整合包实际使用的功能安装即可。
 

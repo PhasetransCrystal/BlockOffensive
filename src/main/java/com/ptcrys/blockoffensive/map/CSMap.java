@@ -1,6 +1,7 @@
 package com.ptcrys.blockoffensive.map;
 
 import com.ptcrys.blockoffensive.BOConfig;
+import com.ptcrys.blockoffensive.map.team.capability.ColoredPlayerCapability;
 import com.ptcrys.blockoffensive.client.data.WeaponData;
 import com.ptcrys.blockoffensive.command.BOTaczLiveFireDebugCommand;
 import com.ptcrys.blockoffensive.compat.BOImpl;
@@ -122,6 +123,7 @@ public abstract class CSMap extends BaseRoundMap<String, CSRoundResultReason> {
     protected boolean overtimeTerminating = false;
 
     private final Map<UUID, ShopStateSnapshot> lastShopStates = new HashMap<>();
+    private final Set<UUID> pendingTeamSwitches = new HashSet<>();
 
     private final CSSpectatorRosterSync spectatorRosterSync = new CSSpectatorRosterSync();
 
@@ -446,7 +448,16 @@ public abstract class CSMap extends BaseRoundMap<String, CSRoundResultReason> {
      * 切换两个队伍的阵营
      */
     public void switchTeams() {
+        var tColors = getT().getCapabilityMap().get(ColoredPlayerCapability.class);
+        var ctColors = getCT().getCapabilityMap().get(ColoredPlayerCapability.class);
+        var oldT = tColors.map(ColoredPlayerCapability::snapshot).orElse(java.util.Map.of());
+        var oldCt = ctColors.map(ColoredPlayerCapability::snapshot).orElse(java.util.Map.of());
         this.getMapTeams().switchAttackAndDefend(this, getT(), getCT());
+        tColors.ifPresent(cap -> cap.restore(oldCt));
+        ctColors.ifPresent(cap -> cap.restore(oldT));
+        var viewers = getMapTeams().getOnlineWithSpec();
+        getT().syncCapabilities(viewers);
+        getCT().syncCapabilities(viewers);
     }
 
     public final VoteObj getVote() {
@@ -582,11 +593,26 @@ public abstract class CSMap extends BaseRoundMap<String, CSRoundResultReason> {
 
     @Override
     public MapTeams.JoinTeamResult join(String teamName, ServerPlayer player) {
-        MapTeams.JoinTeamResult result = super.join(teamName, player);
+        // BaseMap.join leaves the old team first, including for a same-map switch.
+        // Defer the exit teleport until we know whether the player actually left.
+        boolean switching = (checkGameHasPlayer(player) || checkSpecHasPlayer(player))
+                && pendingTeamSwitches.add(player.getUUID());
+        MapTeams.JoinTeamResult result;
+        try {
+            result = super.join(teamName, player);
+        } finally {
+            if (switching) {
+                pendingTeamSwitches.remove(player.getUUID());
+                if (!checkGameHasPlayer(player) && !checkSpecHasPlayer(player)) {
+                    teleportPlayerToMatchEndPoint(player);
+                }
+            }
+        }
         if (!result.isSuccess()) {
             return result;
         }
 
+        BOSpecManager.resetSpectating(player);
         MapTeams mapTeams = this.getMapTeams();
         mapTeams.getTeamByPlayer(player).ifPresent(team -> {
             // 如果游戏已经开始，设置玩家为旁观者
@@ -604,7 +630,10 @@ public abstract class CSMap extends BaseRoundMap<String, CSRoundResultReason> {
         boolean wasInMap = checkGameHasPlayer(player) || checkSpecHasPlayer(player);
         super.leave(player);
         if (wasInMap && !checkGameHasPlayer(player) && !checkSpecHasPlayer(player)) {
-            teleportPlayerToMatchEndPoint(player);
+            BOSpecManager.resetSpectating(player);
+            if (!pendingTeamSwitches.contains(player.getUUID())) {
+                teleportPlayerToMatchEndPoint(player);
+            }
         }
     }
 

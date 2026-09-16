@@ -7,6 +7,10 @@ import com.ptcrys.blockoffensive.net.dm.PlayerMoveC2SPacket;
 import com.ptcrys.blockoffensive.net.mvp.MvpHUDCloseS2CPacket;
 import com.ptcrys.blockoffensive.net.mvp.MvpMessageS2CPacket;
 import com.ptcrys.blockoffensive.net.shop.ShopStatesS2CPacket;
+import com.ptcrys.blockoffensive.net.shop.ShopDropPickupC2SPacket;
+import com.ptcrys.blockoffensive.net.shop.ShopNearbyDropsRequestC2SPacket;
+import com.ptcrys.blockoffensive.net.shop.ShopDropPickupResultS2CPacket;
+import com.ptcrys.blockoffensive.net.shop.ShopNearbyDropsS2CPacket;
 import com.ptcrys.blockoffensive.net.spec.BombFuseS2CPacket;
 import com.ptcrys.blockoffensive.net.spec.CSGameWeaponDataS2CPacket;
 import com.ptcrys.blockoffensive.net.spec.KillCamS2CPacket;
@@ -24,7 +28,7 @@ import java.util.function.BiConsumer;
 
 /** Single source of truth for the BO channel discriminator order. */
 public final class BOPacketRegistration {
-    public static final String PROTOCOL_VERSION = "1.4.1";
+    public static final String PROTOCOL_VERSION = "1.4.2";
 
     public enum Direction {
         DEFAULT,
@@ -62,6 +66,7 @@ public final class BOPacketRegistration {
                 BombDemolitionProgressS2CPacket.class,
                 MvpHUDCloseS2CPacket.class,
                 MvpMessageS2CPacket.class,
+                CSScoreboardS2CPacket.class,
                 ShopStatesS2CPacket.class,
                 CSGameSettingsS2CPacket.class,
                 CSTabRemovalS2CPacket.class,
@@ -80,7 +85,7 @@ public final class BOPacketRegistration {
                 VoteCastC2SPacket.class
         };
         for (int discriminator = 0; discriminator < legacy.length; discriminator++) {
-            Direction direction = discriminator == 2 || discriminator == 8
+            Direction direction = discriminator == 2 || discriminator == 6 || discriminator == 9
                     ? Direction.PLAY_TO_CLIENT
                     : Direction.DEFAULT;
             registrar.register(legacy[discriminator], direction);
@@ -102,5 +107,11 @@ public final class BOPacketRegistration {
                 com.ptcrys.blockoffensive.net.mvp.MvpMusicChunkS2CPacket.class,
                 Direction.PLAY_TO_CLIENT
         );
+        // Shop nearby-drop protocol is appended to preserve existing discriminators.
+        registrar.register(ShopDropPickupC2SPacket.class, Direction.PLAY_TO_SERVER);
+        registrar.register(ShopNearbyDropsRequestC2SPacket.class, Direction.PLAY_TO_SERVER);
+        registrar.register(ShopDropPickupResultS2CPacket.class, Direction.PLAY_TO_CLIENT);
+        registrar.register(ShopNearbyDropsS2CPacket.class, Direction.PLAY_TO_CLIENT);
+        registrar.register(CSScoreboardSync.class, Direction.PLAY_TO_CLIENT);
     }
 }

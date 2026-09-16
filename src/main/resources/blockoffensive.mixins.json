@@ -10,6 +10,8 @@
   "plugin": "com.ptcrys.blockoffensive.BlockOffensiveMixinPlugin",
   "mixins": [
     "C4KitsItemEntityMixin",
+    "ItemEntityPickupAccessor",
+    "MatchDropPickupAccessor",
     "StepSoundMixin"
   ],
   "client": [
@@ -19,6 +21,7 @@
     "client.PostChainAccessor",
     "client.PostPassAccessor",
     "client.PlayerRendererMixin",
+    "client.ShopPreviewPoseMixin",
     "client.C4ItemOutlineMixin",
     "client.SoundEngineChannelAccessor",
     "client.SoundManagerAccessor"

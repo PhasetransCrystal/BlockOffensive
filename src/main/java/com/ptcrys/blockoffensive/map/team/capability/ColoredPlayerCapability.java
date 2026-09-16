@@ -1,5 +1,6 @@
 package com.ptcrys.blockoffensive.map.team.capability;
 
+import com.ptcrys.blockoffensive.util.PlayerColorAssignments;
 import com.ptcrys.blockoffensive.util.TeamPlayerColor;
 import com.ptcrys.fpsmatch.core.capability.FPSMCapability;
 import com.ptcrys.fpsmatch.core.capability.FPSMCapabilityManager;
@@ -9,89 +10,64 @@ import com.ptcrys.fpsmatch.core.team.BaseTeam;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 
-import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.UUID;
 
-public class ColoredPlayerCapability extends TeamCapability implements FPSMCapability.CapabilitySynchronizable{
-    private boolean dirty;
+public class ColoredPlayerCapability extends TeamCapability implements FPSMCapability.CapabilitySynchronizable {
+    private boolean dirty = true;
+    private final PlayerColorAssignments colors = new PlayerColorAssignments();
 
-    private final Map<UUID, TeamPlayerColor> colored = new ConcurrentHashMap<>();
+    public ColoredPlayerCapability(BaseTeam team) { super(team); }
 
-    private final Random random = new Random();
-
-    public ColoredPlayerCapability(BaseTeam team) {
-        super(team);
-    }
-
-    /**
-     * 注册能力到全局管理器
-     */
     public static void register() {
         FPSMCapabilityManager.register(FPSMCapabilityManager.CapabilityType.TEAM, ColoredPlayerCapability.class, ColoredPlayerCapability::new);
     }
 
-    public TeamPlayerColor getEmpty(){
-        Collection<TeamPlayerColor> colors = colored.values();
-        for (TeamPlayerColor color : TeamPlayerColor.values()){
-            if(!colors.contains(color)){
-                return color;
-            };
-        }
-
-        return TeamPlayerColor.values()[random.nextInt(TeamPlayerColor.values().length)];
+    @Override public void tick() {
+        if (!team.isClientSide()) dirty |= colors.reconcile(team.getPlayerList());
     }
 
-    public TeamPlayerColor getColor(UUID uuid){
-        TeamPlayerColor color = colored.get(uuid);
-        // 玩家中途加入队伍、或存档重载(fpsm save)后队伍能力会被重建且不会再触发 onJoin，
-        // 此时若该玩家已是本队成员则补发颜色，避免名称回退为默认白色。
-        if (color == null && team.hasPlayer(uuid)) {
-            color = getEmpty();
-            colored.put(uuid, color);
-            dirty = true;
-        }
-        return color;
+    public int getPlayerColor(UUID uuid) {
+        if (!team.isClientSide()) tick();
+        return colors.get(uuid);
     }
 
-    @SubscribeEvent
-    public void onJoin(FPSMTeamEvent.JoinEvent event) {
-        colored.put(event.getPlayer().getUUID(),getEmpty());
+    public java.util.Map<UUID, Integer> snapshot() { tick(); return colors.snapshot(); }
+
+    public void restore(java.util.Map<UUID, Integer> snapshot) {
+        if (team.isClientSide()) return;
+        colors.replace(snapshot);
+        tick();
         dirty = true;
     }
 
-    @SubscribeEvent
-    public void onLeave(FPSMTeamEvent.LeaveEvent event) {
-        colored.remove(event.getPlayer().getUUID());
+    /** Legacy palette accessor; extended rosters should use getPlayerColor. */
+    public TeamPlayerColor getColor(UUID uuid) {
+        int color = getPlayerColor(uuid);
+        for (TeamPlayerColor entry : TeamPlayerColor.values()) if (entry.getRGBA() == color) return entry;
+        return null;
+    }
+
+    @SubscribeEvent public void onJoin(FPSMTeamEvent.JoinEvent event) {
+        if (team.isClientSide() || event.getTeam() != team) return;
+        colors.assign(event.getPlayer().getUUID());
         dirty = true;
     }
 
-    @Override
-    public boolean isDirty() {
-        return dirty;
+    @SubscribeEvent public void onLeave(FPSMTeamEvent.LeaveEvent event) {
+        if (team.isClientSide() || event.getTeam() != team) return;
+        dirty |= colors.remove(event.getPlayer().getUUID());
     }
 
-    @Override
-    public void readFromBuf(FriendlyByteBuf buf) {
-        colored.clear();
-        Map<UUID, TeamPlayerColor> map = buf.readMap(FriendlyByteBuf::readUUID,(friendlyByteBuf)-> friendlyByteBuf.readEnum(TeamPlayerColor.class));
-        colored.putAll(map);
-    }
-
-    @Override
-    public void writeToBuf(FriendlyByteBuf buf) {
-        buf.writeMap(colored,FriendlyByteBuf::writeUUID,FriendlyByteBuf::writeEnum);
+    @Override public boolean isDirty() { tick(); return dirty; }
+    @Override public void readFromBuf(FriendlyByteBuf buf) {
+        colors.replace(buf.readMap(FriendlyByteBuf::readUUID, FriendlyByteBuf::readInt));
         dirty = false;
     }
-
-    @Override
-    public void destroy() {
-        colored.clear();
-        dirty = true;
+    @Override public void writeToBuf(FriendlyByteBuf buf) {
+        tick();
+        buf.writeMap(colors.snapshot(), FriendlyByteBuf::writeUUID, FriendlyByteBuf::writeInt);
     }
-
-    @Override
-    public boolean isImmutable(){
-        return true;
-    };
-
+    @Override public void onBroadcast() { dirty = false; }
+    @Override public void destroy() { colors.clear(); dirty = true; }
+    @Override public boolean isImmutable() { return true; }
 }
