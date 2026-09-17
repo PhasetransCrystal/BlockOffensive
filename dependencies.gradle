@@ -1,0 +1,46 @@
+
+// Modern UI shares these libraries with Minecraft.
+def withoutMinecraftLibraries = { dependency ->
+    dependency.exclude group: 'org.apache.logging.log4j'
+    dependency.exclude group: 'com.google.code.findbugs', module: 'jsr305'
+    dependency.exclude group: 'org.jetbrains', module: 'annotations'
+    dependency.exclude group: 'com.ibm.icu', module: 'icu4j'
+    dependency.exclude group: 'it.unimi.dsi', module: 'fastutil'
+}
+
+// Dependencies
+dependencies {
+    withoutMinecraftLibraries(additionalRuntimeClasspath(implementation("icyllis.modernui:ModernUI-Core:${modernui_core_version}")))
+    withoutMinecraftLibraries(additionalRuntimeClasspath(implementation("icyllis.modernui:ModernUI-Markflow:${modernui_core_version}")))
+    modImplementation "icyllis.modernui:ModernUI-Forge:${minecraft_version}-${modernui_forge_version}"
+
+
+    compileOnly(annotationProcessor("io.github.llamalad7:mixinextras-common:${mixinextras_version}"))
+    implementation(jarJar("io.github.llamalad7:mixinextras-forge:${mixinextras_version}"))
+    annotationProcessor "org.spongepowered:mixin:${mixin_processor_version}:processor"
+
+    modCompileOnly "org.apache.commons:commons-math3:${commons_math_version}"
+    modCompileOnly "maven.modrinth:timeless-and-classics-zero:${tacz_version}"
+    modRuntimeOnly "maven.modrinth:timeless-and-classics-zero:${tacz_version}"
+    modImplementation "maven.modrinth:lr-tactical:${lrtactical_version}"
+    modImplementation "maven.modrinth:cloth-config:${cloth_config_version}"
+    modImplementation('net.ptcrys:fpsmatch') { transitive = false }
+    modImplementation "maven.modrinth:counterstrikegrenade:${cs_grenade_version}"
+    modRuntimeOnly "maven.modrinth:kotlin-for-forge:${kotlin_forge_version}"
+    modImplementation "maven.modrinth:hit-indication:${hit_indication_version}"
+    modImplementation "maven.modrinth:physicsmod:${physicsmod_version}"
+    modImplementation "maven.modrinth:gd656killicon:${gd656killicon_version}"
+    modCompileOnly "maven.modrinth:tacz-tweaks:${tacztweak_version}"
+    modRuntimeOnly "maven.modrinth:yacl:${yacl_version}"
+    modRuntimeOnly "maven.modrinth:jade:${jade_version}"
+    modImplementation "dev.latvian.mods:kubejs-forge:${kubejs_version}"
+    modRuntimeOnly "dev.latvian.mods:rhino-forge:${rhino_version}"
+    modRuntimeOnly "dev.architectury:architectury-forge:${architectury_version}"
+    modRuntimeOnly "maven.modrinth:spark:1.10.53-forge"
+
+    implementation(jarJar("com.googlecode.soundlibs:jlayer:1.0.1.4"))
+    implementation(jarJar("com.googlecode.soundlibs:jorbis:0.0.17.4"))
+    implementation(jarJar("com.googlecode.soundlibs:vorbisspi:1.0.3.3"))
+    implementation(jarJar("com.googlecode.soundlibs:tritonus-share:0.3.7.4"))
+
+}

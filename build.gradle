@@ -1,18 +1,36 @@
 plugins {
+    id 'java-library'
     id 'eclipse'
     id 'idea'
-    id 'net.neoforged.moddev.legacyforge' version '2.0.140'
     id 'maven-publish'
-    id 'jacoco'
+    alias libs.plugins.modDevGradleLegacy
+    alias libs.plugins.kotlinDevGradleLegacy
+    alias libs.plugins.lombokLegacy
+    alias libs.plugins.kotlinLombokLegacy
+    alias libs.plugins.spotless
 }
 
-// Project identity
-group = mod_group_id
-version = "${minecraft_version}-${mod_version}-${file_version}"
-def isRelease = file_version != "forge-snapshot"
+allprojects {
+    group = 'net.ptcrys'
+}
 
-base {
-    archivesName = mod_id
+def isRelease = System.getenv('RELEASE_BUILD') == 'true'
+def buildDate = new Date()
+def year = String.format('%ty', buildDate)
+def month = buildDate.month + 1
+def day = buildDate.date
+def dynamicVersion
+if (isRelease) {
+    dynamicVersion = "${mod_major_version}.${year}.${month}.${day}"
+} else {
+    dynamicVersion = "${mod_major_version}.${year}.${month}-SNAPSHOT"
+}
+ext.mod_version = dynamicVersion
+version = dynamicVersion
+group = mod_group_id
+
+tasks.named('wrapper', Wrapper).configure {
+    distributionType = Wrapper.DistributionType.BIN
 }
 
 java {
@@ -20,229 +38,32 @@ java {
     withSourcesJar()
 }
 
-// Minecraft development environment
-legacyForge {
-    version = "${minecraft_version}-${forge_version}"
+apply from: "$projectDir/gradle/scripts/moddevgradle.gradle"
+apply from: "$projectDir/dependencies.gradle"
+apply from: "$projectDir/gradle/scripts/resources.gradle"
+apply from: "$projectDir/gradle/scripts/jars.gradle"
+apply from: "$projectDir/gradle/scripts/repositories.gradle"
+apply from: "$projectDir/gradle/scripts/spotless.gradle"
 
-    parchment {
-        minecraftVersion = mapping_mc_version
-        mappingsVersion = mapping_version
-    }
-
-    validateAccessTransformers = true
-
-    runs {
-        configureEach {
-            gameDirectory = project.file('run')
-            systemProperty 'forge.logging.markers', 'REGISTRIES'
-            logLevel = org.slf4j.event.Level.DEBUG
-        }
-
-        client {
-            client()
-            systemProperty 'forge.enabledGameTestNamespaces', mod_id
-        }
-
-        server {
-            server()
-            systemProperty 'forge.enabledGameTestNamespaces', mod_id
-            programArgument '--nogui'
-        }
-
-        gameTestServer {
-            type = 'gameTestServer'
-            gameDirectory = project.file('build/run-gametest')
-            systemProperty 'forge.enabledGameTestNamespaces', mod_id
-        }
-
-        data {
-            data()
-            gameDirectory = project.file('run-data')
-            programArguments.addAll(
-                    '--mod', mod_id,
-                    '--all',
-                    '--output', file('src/generated/resources').absolutePath,
-                    '--existing', file('src/main/resources').absolutePath
-            )
-        }
-    }
-
-    mods {
-        "${mod_id}" {
-            sourceSet sourceSets.main
-        }
-    }
+generateModMetadata.doFirst {
+    mkdir('run/client')
+    mkdir('run/server')
+    mkdir('run/clientData')
+    mkdir('run/serverTest')
 }
-
-mixin {
-    add sourceSets.main, "${mod_id}.refmap.json"
-    config "${mod_id}.mixins.json"
-}
-
-// Dependency repositories
-repositories {
-    mavenCentral()
-    maven { name = 'IzzelAliz'; url = 'https://maven.izzel.io/releases/' }
-
-    maven {
-        name = 'PTCrysReleases'
-        url = uri('https://maven.ptcrys.net/releases')
-    }
-
-    maven {
-        name = 'CurseMaven'
-        url = 'https://www.cursemaven.com'
-        content { includeGroup 'curse.maven' }
-    }
-    maven {
-        name = 'Modrinth'
-        url = 'https://api.modrinth.com/maven'
-        content { includeGroup 'maven.modrinth' }
-    }
-    maven {
-        name = 'LatvianDev'
-        url = 'https://maven.latvian.dev/releases'
-        content {
-            includeGroup 'dev.latvian.mods'
-            includeGroup 'dev.latvian.apps'
-        }
-    }
-    maven {
-        name = 'Architectury'
-        url = 'https://maven.architectury.dev'
-        content { includeGroup 'dev.architectury' }
-    }
-}
-
-// Modern UI shares these libraries with Minecraft.
-def withoutMinecraftLibraries = { dependency ->
-    dependency.exclude group: 'org.apache.logging.log4j'
-    dependency.exclude group: 'com.google.code.findbugs', module: 'jsr305'
-    dependency.exclude group: 'org.jetbrains', module: 'annotations'
-    dependency.exclude group: 'com.ibm.icu', module: 'icu4j'
-    dependency.exclude group: 'it.unimi.dsi', module: 'fastutil'
-}
-
-// Dependencies
-dependencies {
-    withoutMinecraftLibraries(additionalRuntimeClasspath(implementation("icyllis.modernui:ModernUI-Core:${modernui_core_version}")))
-    withoutMinecraftLibraries(additionalRuntimeClasspath(implementation("icyllis.modernui:ModernUI-Markflow:${modernui_core_version}")))
-    modImplementation "icyllis.modernui:ModernUI-Forge:${minecraft_version}-${modernui_forge_version}"
-
-
-    compileOnly(annotationProcessor("io.github.llamalad7:mixinextras-common:${mixinextras_version}"))
-    implementation(jarJar("io.github.llamalad7:mixinextras-forge:${mixinextras_version}"))
-    annotationProcessor "org.spongepowered:mixin:${mixin_processor_version}:processor"
-
-    modCompileOnly "org.apache.commons:commons-math3:${commons_math_version}"
-    modCompileOnly "maven.modrinth:timeless-and-classics-zero:${tacz_version}"
-    modRuntimeOnly "maven.modrinth:timeless-and-classics-zero:${tacz_version}"
-    modImplementation "maven.modrinth:lr-tactical:${lrtactical_version}"
-    modImplementation "maven.modrinth:cloth-config:${cloth_config_version}"
-    modImplementation('com.ptcrys:fpsmatch') { transitive = false }
-    modImplementation "maven.modrinth:counterstrikegrenade:${cs_grenade_version}"
-    modRuntimeOnly "maven.modrinth:kotlin-for-forge:${kotlin_forge_version}"
-    modImplementation "maven.modrinth:hit-indication:${hit_indication_version}"
-    modImplementation "maven.modrinth:physicsmod:${physicsmod_version}"
-    modImplementation "maven.modrinth:gd656killicon:${gd656killicon_version}"
-    modCompileOnly "maven.modrinth:tacz-tweaks:${tacztweak_version}"
-    modRuntimeOnly "maven.modrinth:yacl:${yacl_version}"
-    modRuntimeOnly "maven.modrinth:jade:${jade_version}"
-    modImplementation "dev.latvian.mods:kubejs-forge:${kubejs_version}"
-    modRuntimeOnly "dev.latvian.mods:rhino-forge:${rhino_version}"
-    modRuntimeOnly "dev.architectury:architectury-forge:${architectury_version}"
-    modRuntimeOnly "maven.modrinth:spark:1.10.53-forge"
-
-    implementation(jarJar("com.googlecode.soundlibs:jlayer:1.0.1.4"))
-    implementation(jarJar("com.googlecode.soundlibs:jorbis:0.0.17.4"))
-    implementation(jarJar("com.googlecode.soundlibs:vorbisspi:1.0.3.3"))
-    implementation(jarJar("com.googlecode.soundlibs:tritonus-share:0.3.7.4"))
-
-}
-
-// Generated resources and packaging
-def generateModMetadata = tasks.register('generateModMetadata', ProcessResources) {
-    def metadata = [
-            minecraft_version      : minecraft_version,
-            minecraft_version_range: minecraft_version_range,
-            forge_version          : forge_version,
-            forge_version_range    : forge_version_range,
-            loader_version_range   : loader_version_range,
-            fpsm_version_range     : fpsm_version_range,
-            mod_id                 : mod_id,
-            mod_name               : mod_name,
-            mod_license            : mod_license,
-            mod_version            : mod_version,
-            mod_authors            : mod_authors,
-            mod_description        : mod_description
-    ]
-    inputs.properties metadata
-    expand metadata
-    from 'src/main/templates'
-    into layout.buildDirectory.dir('generated/resources/modMetadata')
-}
-
-sourceSets.test.compileClasspath += sourceSets.main.compileClasspath
-
-sourceSets.main.resources {
-    srcDir 'src/generated/resources'
-    srcDir generateModMetadata
-}
-legacyForge.ideSyncTask generateModMetadata
-
-def syncGameTestStructures = tasks.register('syncGameTestStructures', Sync) {
-    from "src/main/resources/data/${mod_id}/gameteststructures"
-    into layout.buildDirectory.dir('run-gametest/gameteststructures')
-}
-
-tasks.named('runGameTestServer') {
-    dependsOn syncGameTestStructures
-}
-
-tasks.named('jar', Jar) {
-    manifest.attributes('MixinConfigs': "${mod_id}.mixins.json")
-}
-
-tasks.named('createMinecraftArtifacts') {
-    def java21 = javaToolchains.launcherFor {
-        languageVersion = JavaLanguageVersion.of(21)
-    }.map { it.executablePath.asFile.absolutePath }
-    toolsJavaExecutable.set(java21)
-    javaExecutable.set(java21)
-}
-
 
 tasks.withType(JavaCompile).configureEach {
-    options.encoding = 'UTF-8'
+    options.encoding = 'UTF-8' // Use the UTF-8 charset for Java compilation
+    options.compilerArgs << "-Xlint:-deprecation" << "-Xlint:-removal"
 }
 
-tasks.register('deathCameraTimelineCheck', JavaExec) {
-    dependsOn tasks.named('testClasses')
-    classpath = sourceSets.test.output + sourceSets.main.output + sourceSets.main.compileClasspath
-    mainClass = 'com.ptcrys.blockoffensive.client.spec.DeathCameraTimelineCheck'
+jar{
+    exclude "**/.cache"
+    exclude "**/SimplifiedToTraditional.properties"
 }
 
-tasks.register('deathCameraRigCheck', JavaExec) {
-    dependsOn tasks.named('testClasses')
-    classpath = sourceSets.test.output + sourceSets.main.output + sourceSets.main.compileClasspath
-    mainClass = 'com.ptcrys.blockoffensive.client.spec.DeathCameraRigCheck'
-}
-
-tasks.register('boCommandTreeCheck', JavaExec) {
-    dependsOn tasks.named('testClasses')
-    // Use runtime Log4j, not the old compile-only copy brought in by server compatibility dependencies.
-    classpath = sourceSets.test.output + sourceSets.main.output +
-            sourceSets.main.runtimeClasspath.filter { it.name.startsWith('log4j-') } +
-            sourceSets.main.compileClasspath.filter { !it.name.startsWith('log4j-') }
-    mainClass = 'com.ptcrys.blockoffensive.command.BOCommandTreeCheck'
-    classpath += files(layout.buildDirectory.file("moddev/artifacts/client-extra-${minecraft_version}-${forge_version}.jar"))
-}
-
-tasks.named('check') {
-    dependsOn tasks.named('deathCameraTimelineCheck'), tasks.named('deathCameraRigCheck')
-    dependsOn gradle.includedBuild('FPSMatch').task(':cameraSystemCheck')
-    dependsOn gradle.includedBuild('FPSMatch').task(':commandTreeCheck')
-    dependsOn tasks.named('boCommandTreeCheck')
+java {
+    withSourcesJar()
 }
 
 // Maven publication
