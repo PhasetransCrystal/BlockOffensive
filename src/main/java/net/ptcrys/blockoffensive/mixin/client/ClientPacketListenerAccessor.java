@@ -1,0 +1,21 @@
+package net.ptcrys.blockoffensive.mixin.client;
+
+import net.minecraft.client.multiplayer.ClientPacketListener;
+import net.minecraft.client.multiplayer.PlayerInfo;
+
+import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.gen.Accessor;
+
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
+
+@Mixin(ClientPacketListener.class)
+public interface ClientPacketListenerAccessor {
+
+    @Accessor("playerInfoMap")
+    Map<UUID, PlayerInfo> mcs2$getPlayerInfoMap();
+
+    @Accessor("listedPlayers")
+    Set<PlayerInfo> mcs2$getListedPlayers();
+}

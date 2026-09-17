@@ -4,10 +4,10 @@
   "mixinextras": {
     "minVersion": "0.5.0"
   },
-  "package": "com.ptcrys.blockoffensive.mixin",
+  "package": "net.ptcrys.blockoffensive.mixin",
   "compatibilityLevel": "JAVA_8",
   "refmap": "blockoffensive.refmap.json",
-  "plugin": "com.ptcrys.blockoffensive.BlockOffensiveMixinPlugin",
+  "plugin": "net.ptcrys.blockoffensive.BlockOffensiveMixinPlugin",
   "mixins": [
     "C4KitsItemEntityMixin",
     "ItemEntityPickupAccessor",
