@@ -1,0 +1,80 @@
+:root {
+  --ifm-color-primary: #bd5808;
+  --ifm-color-primary-dark: #a94d05;
+  --ifm-color-primary-darker: #963f00;
+  --ifm-color-primary-darkest: #733000;
+  --ifm-color-primary-light: #d16b1a;
+  --ifm-color-primary-lighter: #e27d2b;
+  --ifm-color-primary-lightest: #f19a54;
+  --ifm-code-font-size: 95%;
+  --ifm-heading-font-weight: 760;
+  --bo-ink: #101722;
+  --bo-paper: #f4f3ee;
+  --bo-wash: #e9e7df;
+  --bo-orange: #ff9f1c;
+  --bo-orange-ink: #a94e06;
+  --bo-muted: #5d6670;
+  --bo-line: #d0d0c8;
+}
+
+[data-theme='dark'] {
+  --ifm-color-primary: #ffb24b;
+  --ifm-color-primary-dark: #ff9f1c;
+  --ifm-color-primary-darker: #e88b0b;
+  --ifm-color-primary-darkest: #b86400;
+  --ifm-color-primary-light: #ffc26d;
+  --ifm-color-primary-lighter: #ffd08e;
+  --ifm-color-primary-lightest: #ffe0b1;
+  --bo-ink: #f3f1e9;
+  --bo-paper: #f3f1e9;
+  --bo-wash: #1d252e;
+  --bo-orange: #ffad32;
+  --bo-orange-ink: #ffb44d;
+  --bo-muted: #aeb6bd;
+  --bo-line: #343c44;
+  --ifm-background-color: #11161d;
+  --ifm-background-surface-color: #171d25;
+  --ifm-font-color-base: #e4e6e5;
+  --docusaurus-highlighted-code-line-bg: rgb(255 255 255 / 0.08);
+}
+
+html { scroll-behavior: smooth; }
+body { letter-spacing: 0; }
+.navbar { border-bottom: 1px solid var(--bo-line); box-shadow: none; background: color-mix(in srgb, var(--ifm-background-color) 94%, transparent); backdrop-filter: blur(12px); }
+.navbar__logo img { border-radius: 3px; }
+.navbar__title, .footer__title, .theme-doc-markdown h1, .theme-doc-markdown h2, .theme-doc-markdown h3 { letter-spacing: -0.02em; }
+.theme-doc-page { background-image: linear-gradient(90deg, color-mix(in srgb, var(--bo-line) 28%, transparent) 1px, transparent 1px); background-size: 72px 100%; }
+.theme-doc-sidebar-container { border-right: 1px solid var(--bo-line) !important; background: color-mix(in srgb, var(--ifm-background-surface-color) 88%, var(--ifm-background-color)); }
+.theme-doc-sidebar-menu { padding-top: 1.1rem; }
+.theme-doc-sidebar-menu::before { display: block; margin: 0 0.75rem 1rem; border-bottom: 1px solid var(--bo-line); padding: 0 0 0.75rem; color: var(--bo-orange-ink); content: 'BO / FIELD MANUAL'; font: 800 0.68rem var(--ifm-font-family-monospace); letter-spacing: 0.12em; }
+.menu__link { border-radius: 0; border-left: 2px solid transparent; }
+.menu__link:hover { background: var(--bo-wash); color: var(--bo-ink); }
+.menu__link--active { border-left-color: var(--bo-orange); background: var(--bo-wash); color: var(--bo-orange-ink); font-weight: 800; }
+.theme-doc-markdown { max-width: 860px; }
+.theme-doc-markdown > h1:first-child { position: relative; margin-bottom: 2rem; border-top: 4px solid var(--bo-orange); border-bottom: 1px solid var(--bo-line); padding: 1.45rem 0 1.35rem; color: var(--bo-ink); font-size: clamp(2.5rem, 5vw, 4.3rem); line-height: 0.98; }
+.theme-doc-markdown > h1:first-child::before { display: block; margin-bottom: 0.75rem; color: var(--bo-orange-ink); content: 'BLOCKOFFENSIVE / WIKI'; font: 800 0.68rem var(--ifm-font-family-monospace); letter-spacing: 0.14em; }
+.theme-doc-markdown h2 { margin-top: 3.2rem; border-top: 1px solid var(--bo-line); padding-top: 1rem; color: var(--bo-ink); font-size: 1.75rem; }
+.theme-doc-markdown h2::before { margin-right: 0.55rem; color: var(--bo-orange-ink); content: '//'; font-family: var(--ifm-font-family-monospace); }
+.theme-doc-markdown h3 { margin-top: 2.2rem; color: var(--bo-ink); }
+.theme-doc-markdown p, .theme-doc-markdown li { line-height: 1.82; }
+.theme-doc-markdown a { font-weight: 650; text-decoration-color: color-mix(in srgb, var(--bo-orange) 55%, transparent); text-underline-offset: 3px; }
+.theme-doc-markdown table { display: table; width: 100%; max-width: 100%; overflow-x: auto; border-collapse: separate; border-spacing: 0; border-top: 3px solid var(--bo-orange); }
+.theme-doc-markdown thead { background: #101722; color: #f4f3ee; }
+.theme-doc-markdown th { font: 800 0.76rem var(--ifm-font-family-monospace); letter-spacing: 0.04em; }
+.theme-doc-markdown th, .theme-doc-markdown td { border-color: var(--bo-line); padding: 0.8rem 0.9rem; }
+.theme-doc-markdown tbody tr:nth-child(even) { background: var(--bo-wash); }
+.theme-doc-markdown code { border: 1px solid color-mix(in srgb, var(--bo-orange) 28%, var(--bo-line)); border-radius: 2px; background: color-mix(in srgb, var(--bo-orange) 8%, var(--ifm-background-surface-color)); }
+.theme-doc-markdown pre { border: 1px solid var(--bo-line); border-left: 4px solid var(--bo-orange); border-radius: 0; box-shadow: 10px 10px 0 color-mix(in srgb, var(--bo-line) 35%, transparent); }
+.theme-doc-toc-desktop { border-left: 1px solid var(--bo-line); }
+.table-of-contents::before { display: block; margin-bottom: 0.75rem; color: var(--bo-orange-ink); content: 'ON THIS PAGE / 目录'; font: 800 0.65rem var(--ifm-font-family-monospace); letter-spacing: 0.1em; }
+.table-of-contents__link { font-size: 0.82rem; }
+.table-of-contents__link--active { color: var(--bo-orange-ink); font-weight: 800; }
+.pagination-nav__link { border: 1px solid var(--bo-line); border-radius: 0; background: var(--ifm-background-surface-color); }
+.pagination-nav__link:hover { border-color: var(--bo-orange); background: var(--bo-wash); }
+.pagination-nav__sublabel { color: var(--bo-orange-ink); font: 800 0.68rem var(--ifm-font-family-monospace); letter-spacing: 0.08em; }
+.theme-last-updated { border-top: 1px solid var(--bo-line); padding-top: 0.8rem; font-family: var(--ifm-font-family-monospace); }
+.breadcrumbs__item--active .breadcrumbs__link { border-radius: 0; background: var(--bo-wash); color: var(--bo-orange-ink); }
+.footer--dark { --ifm-footer-background-color: #0d1219; --ifm-footer-link-color: #d9e0e5; --ifm-footer-title-color: #ffffff; }
+@media (max-width: 996px) { .theme-doc-page { background-image: none; } .theme-doc-markdown table { display: block; } }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } * { scroll-behavior: auto !important; transition-duration: 0.01ms !important; } }
+
