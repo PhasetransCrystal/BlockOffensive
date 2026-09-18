@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkblockoffensive_wiki=self.webpackChunkblockoffensive_wiki||[]).push([["1880"],{8347(e,i,k){k.d(i,{createInfoServices:()=>s.v});var s=k(4455);k(9044)}}]);

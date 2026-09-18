@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkblockoffensive_wiki=self.webpackChunkblockoffensive_wiki||[]).push([["1668"],{8810(e,s,r){r.r(s),r.d(s,{default:()=>k});var c=r(1987);r(1763);var i=r(3526),a=r(9013),n=r(2474),u=r(6345),f=r(3780);function k(e){return(0,c.jsx)(a.e3,{className:(0,i.A)(n.G.wrapper.docsPages),children:(0,c.jsx)(f.A,{children:(0,u.v)(e.route.routes)})})}}}]);
