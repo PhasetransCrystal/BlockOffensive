@@ -152,7 +152,9 @@ AGENTS.md
 .local-artifacts/
 
 # Docs
-docs/
+docs/*
+!docs/
+!docs/**/*.md
 
 # Misc
 .tmp-readme-wiki-link
