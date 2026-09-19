@@ -51,4 +51,8 @@ description: BlockOffensive 客户端与通用 Forge 配置键、默认值和取
 
 > 地图自身的 `winnerRound`、`roundTimeLimit`、`startEconomy`、`c4InstantKillRadius` 等不是全局 Forge 键，而是地图设置；使用地图设置界面或 `/fpsm map ... settings` 修改。
 
+## 独立的地图转场配置
+
+半场转场不由 `BOConfig` 注册，而是按世界保存在 `serverconfig/blockoffensive-halftime-intro.json`。其中每个 `cs:<地图 ID>` 可以分别保存 T/CT 的区域、`yaw`、`pitch`、`durationTicks`、`startEnabled` 和 `switchEnabled`。优先使用 `/fpsm blockoffensive halftime ...` 命令写入；完整流程和 JSON 示例见[配置半场转场动画](../mapper/halftime-transition.md)。
+
 修改后重启对应端，进入测试地图验证 Ping、C4、旁观 HUD、投票和回合结束流程。

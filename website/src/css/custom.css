@@ -75,6 +75,43 @@ body { letter-spacing: 0; }
 .theme-last-updated { border-top: 1px solid var(--bo-line); padding-top: 0.8rem; font-family: var(--ifm-font-family-monospace); }
 .breadcrumbs__item--active .breadcrumbs__link { border-radius: 0; background: var(--bo-wash); color: var(--bo-orange-ink); }
 .footer--dark { --ifm-footer-background-color: #0d1219; --ifm-footer-link-color: #d9e0e5; --ifm-footer-title-color: #ffffff; }
-@media (max-width: 996px) { .theme-doc-page { background-image: none; } .theme-doc-markdown table { display: block; } }
+@media (max-width: 996px) {
+  /* backdrop-filter makes Docusaurus' fixed mobile drawer use the 60px navbar
+     as its containing block. Keep the narrow header opaque so the drawer can
+     cover and scroll through the full viewport. */
+  .navbar {
+    background: var(--ifm-navbar-background-color);
+    background-color: var(--ifm-navbar-background-color);
+    backdrop-filter: none;
+  }
+
+  .navbar-sidebar,
+  .navbar-sidebar__backdrop {
+    height: 100vh;
+    height: 100dvh;
+  }
+
+  .navbar-sidebar {
+    max-height: 100dvh;
+    background: var(--ifm-navbar-background-color);
+    background-color: var(--ifm-navbar-background-color);
+  }
+
+  .navbar-sidebar__items {
+    height: calc(100dvh - var(--ifm-navbar-height));
+  }
+
+  .navbar-sidebar .menu__link,
+  .navbar-sidebar .menu__caret {
+    min-height: 44px;
+  }
+
+  .navbar-sidebar .menu__link {
+    align-items: center;
+  }
+
+  .theme-doc-page { background-image: none; }
+  .theme-doc-markdown table { display: block; }
+}
 @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } * { scroll-behavior: auto !important; transition-duration: 0.01ms !important; } }
 

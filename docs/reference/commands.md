@@ -25,7 +25,7 @@ description: BlockOffensive 注册的命令、参数、权限和失败条件。
 
 ## 半场过场
 
-配置保存于世界 `serverconfig/blockoffensive-halftime-intro.json`，`<side>` 为 `ct` 或 `t`：
+这些命令需要 OP 2，配置保存于世界 `serverconfig/blockoffensive-halftime-intro.json`，`<side>` 为 `ct` 或 `t`：
 
 ```text
 /fpsm blockoffensive halftime reload
@@ -38,4 +38,6 @@ description: BlockOffensive 注册的命令、参数、权限和失败条件。
 /fpsm blockoffensive halftime clear <map> <side>
 ```
 
-`duration` 范围为 `60..140` tick；`select` 两坐标不能相同；调试切换分数之和必须等于 `winnerRound - 1`。非 production 环境才会注册 TaCZ、物理布娃娃和死亡图标调试命令。
+`duration` 范围为 `60..140` tick；`select` 两坐标不能相同；`enable` 当前只接受 `switch` 并同时修改两队；调试切换分数之和必须等于 `winnerRound - 1`。完整的区域规划、朝向、预览、JSON 字段与验收流程见[配置半场转场动画](../mapper/halftime-transition.md)。
+
+非 production 环境才会注册 TaCZ、物理布娃娃和死亡图标调试命令。

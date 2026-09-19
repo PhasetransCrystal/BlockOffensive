@@ -6,10 +6,13 @@ const config: Config = {
   title: 'BlockOffensive Wiki',
   tagline: 'Minecraft CS2 风格战术竞技文档',
   favicon: 'img/logo.png',
-  future: {v4: true},
-  url: 'https://phasetranscrystal.github.io',
+  // The default VCS strategy uses Docusaurus' hard-coded 2018 timestamp in
+  // development. Read the real Git timestamp so the document footer is not
+  // misleading while running the local site.
+  future: {v4: true, experimental_vcs: 'git-ad-hoc'},
+  url: 'https://ssorangecaty.github.io',
   baseUrl: process.env.DOCUSAURUS_BASE_URL || '/BlockOffensive/master/',
-  organizationName: 'PhasetransCrystal',
+  organizationName: 'SSOrangeCATY',
   projectName: 'BlockOffensive',
   trailingSlash: true,
   onBrokenLinks: 'throw',
@@ -25,7 +28,7 @@ const config: Config = {
           include: ['**/*.md'],
           routeBasePath: 'docs',
           sidebarPath: './sidebars.ts',
-          editUrl: 'https://github.com/PhasetransCrystal/BlockOffensive/tree/master/',
+          editUrl: ({docPath}) => `https://github.com/SSOrangeCATY/BlockOffensive/edit/master/docs/${docPath}`,
           showLastUpdateTime: true,
         },
         blog: false,
@@ -41,8 +44,9 @@ const config: Config = {
       title: 'BlockOffensive',
       logo: {alt: 'BlockOffensive logo', src: 'img/logo.png'},
       items: [
-        {href: 'https://github.com/PhasetransCrystal/FPSMatch', label: 'FPSMatch', position: 'right'},
-        {href: 'https://github.com/PhasetransCrystal/BlockOffensive', label: 'GitHub', position: 'right'},
+        {to: '/docs/', label: '文档', position: 'left'},
+        {href: 'https://github.com/SSOrangeCATY/FPSMatch', label: 'FPSMatch', position: 'right'},
+        {href: 'https://github.com/SSOrangeCATY/BlockOffensive', label: 'GitHub', position: 'right'},
       ],
     },
     footer: {
@@ -52,8 +56,8 @@ const config: Config = {
         {
           title: '项目',
           items: [
-            {label: 'BlockOffensive', href: 'https://github.com/PhasetransCrystal/BlockOffensive'},
-            {label: 'FPSMatch', href: 'https://github.com/PhasetransCrystal/FPSMatch'},
+            {label: 'BlockOffensive', href: 'https://github.com/SSOrangeCATY/BlockOffensive'},
+            {label: 'FPSMatch', href: 'https://github.com/SSOrangeCATY/FPSMatch'},
             {label: 'Modrinth', href: 'https://modrinth.com/mod/blockoffensive'},
           ],
         },

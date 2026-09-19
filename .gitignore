@@ -154,6 +154,7 @@ AGENTS.md
 # Docs
 docs/*
 !docs/
+!docs/**/
 !docs/**/*.md
 
 # Misc

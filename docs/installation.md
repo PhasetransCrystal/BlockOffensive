@@ -20,7 +20,7 @@ description: 安装 BlockOffensive 客户端和专用服务器，并验证依赖
 
 TaCZ、LR Tactical、CounterStrikeGrenade、KubeJS、Physics Mod、Hit Indication、GD656 Kill Icon 和 TaCZ Tweaks 等在构建脚本中有版本变量，但不是 `mods.toml` 的必需依赖；只有使用对应兼容功能时才安装。
 
-> 当前源码版本由构建日期动态生成，非发布构建形如 `1.2026.09-SNAPSHOT`。以客户端、服务端日志中的实际版本为准。
+> 当前源码版本由构建日期动态生成，非发布构建形如 `1.26.9-SNAPSHOT`（`主版本.两位年份.月份`）。以客户端、服务端日志中的实际版本为准。
 
 ## 玩家客户端
 
