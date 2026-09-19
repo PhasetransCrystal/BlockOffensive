@@ -16,8 +16,9 @@ description: 按 FPSMatch 工作流制作可玩的 CS2 风格爆破与死斗地�
 4. [配置爆破区与区域](mapper/regions.md)
 5. [配置队伍商店](mapper/shop.md)
 6. [调整地图设置与房间](mapper/settings.md)
-7. [配置起始装备和展示资源](mapper/kits.md)
-8. [按真实玩家流程验收](mapper/room-management.md)
+7. [配置半场转场动画](mapper/halftime-transition.md)
+8. [配置起始装备和展示资源](mapper/kits.md)
+9. [按真实玩家流程验收](mapper/room-management.md)
 
 ## 按任务查找
 
@@ -26,6 +27,7 @@ description: 按 FPSMatch 工作流制作可玩的 CS2 风格爆破与死斗地�
 | 使用世界内编辑工具 | [地图编辑工具](mapper/tools.md) |
 | 设置刀、护甲或枪械 | [起始装备](mapper/kits.md) |
 | 添加图标与详情背景 | [房间展示资源](mapper/resources.md) |
+| 配置换边队伍展示 | [半场转场动画](mapper/halftime-transition.md) |
 | 备份、恢复地图数据 | [保存、备份与恢复](mapper/persistence.md) |
 | 复制商店或游戏数据 | [复用与导入地图配置](mapper/importing.md) |
 
@@ -36,7 +38,7 @@ description: 按 FPSMatch 工作流制作可玩的 CS2 风格爆破与死斗地�
 3. 为 T、CT 或死斗队伍添加安全出生点，确认头部和脚部空间无碰撞。
 4. 在 `cs` 地图上配置 A/B 爆破区，检查区域完全位于地图边界内。
 5. 设置展示名称、自动开始、中途加入和房间图标。
-6. 配置起始装备与队伍商店，最后在真实玩家房间中测试一轮。
+6. 配置起始装备、队伍商店和可选的半场转场，最后在真实玩家房间中测试一轮。
 
 ## 管理入口
 
@@ -62,6 +64,7 @@ description: 按 FPSMatch 工作流制作可玩的 CS2 风格爆破与死斗地�
 - C4 只能在设计好的 A/B 区安装，拆除工具可正常工作。
 - 回合结束、重置、重连和旁观不会把玩家留在错误队伍。
 - 购买区、资金、退货和互斥商品在客户端与服务端一致。
+- 半场转场启用时，两队队列、镜头、音效和换边后的出生点都正确。
 - 地图详情页的名称、图标、背景和模式 ID 与实际房间一致。
 
 下一步：[认识地图作者工作流](mapper/getting-started.md) · [模式与运维](game-modes.md)。

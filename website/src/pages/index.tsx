@@ -87,7 +87,7 @@ export default function Home(): ReactNode {
                 <span className={styles.signalDot} aria-hidden="true" />
                 <span>OPERATOR DOSSIER</span>
                 <span className={styles.metaRule} />
-                <span>BO / 1.3.0-SNAPSHOT</span>
+                <span>BO / 1.26.9-SNAPSHOT</span>
               </div>
               <h1>Block<span>Offensive</span></h1>
               <p className={styles.heroLead}>
@@ -181,7 +181,7 @@ export default function Home(): ReactNode {
             <span className={styles.sectionKicker}>OPEN SOURCE / GPL-3.0</span>
             <h2>准备好部署下一场比赛。</h2>
           </div>
-          <Link className={styles.sourceLink} href="https://github.com/PhasetransCrystal/BlockOffensive">
+          <Link className={styles.sourceLink} href="https://github.com/SSOrangeCATY/BlockOffensive">
             查看 GitHub 源码 <span aria-hidden="true">↗</span>
           </Link>
         </section>

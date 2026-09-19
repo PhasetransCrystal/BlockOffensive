@@ -8,7 +8,21 @@ const sidebars: SidebarsConfig = {
     {
       type: 'category',
       label: '战术手册',
-      items: ['player', 'game-modes'],
+      items: [
+        {
+          type: 'category',
+          label: '玩家指南',
+          items: [
+            'player',
+            'player/getting-started',
+            'player/demolition',
+            'player/deathmatch',
+            'player/controls-and-hud',
+            'player/troubleshooting',
+          ],
+        },
+        'game-modes',
+      ],
     },
     {
       type: 'category',
@@ -25,6 +39,7 @@ const sidebars: SidebarsConfig = {
             'mapper/regions',
             'mapper/shop',
             'mapper/settings',
+            'mapper/halftime-transition',
             'mapper/tools',
             'mapper/kits',
             'mapper/resources',
