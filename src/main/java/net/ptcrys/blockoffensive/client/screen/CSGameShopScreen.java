@@ -142,7 +142,15 @@ public final class CSGameShopScreen extends ModernScreen {
     }
 
     private static boolean canBuy(ClientShopSlot slot) {
-        return CSClientData.canOpenShop && !slot.itemStack().isEmpty() && !slot.isLocked() && (CSClientData.getMoney() < 0 || CSClientData.getMoney() >= slot.cost());
+        return canRequestBuy(slot) && (CSClientData.getMoney() < 0 || CSClientData.getMoney() >= slot.cost());
+    }
+
+    /**
+     * Checks only the client-known shop state. The server remains authoritative for
+     * the balance because the client's money packet may still be in flight.
+     */
+    private static boolean canRequestBuy(ClientShopSlot slot) {
+        return CSClientData.canOpenShop && !slot.itemStack().isEmpty() && !slot.isLocked();
     }
 
     @Override
@@ -320,7 +328,10 @@ public final class CSGameShopScreen extends ModernScreen {
     private void sendShopAction(ItemType type, int index, ShopAction action) {
         ClientShopSlot slot = FPSMClient.getGlobalData().getSlotData(type.name(), index);
         if (!CSClientData.canOpenShop || slot.itemStack().isEmpty()) return;
-        if (action == ShopAction.BUY && !canBuy(slot)) return;
+        // Do not reject a purchase solely from the cached client balance. A money
+        // update can arrive after the shop screen was built; the server validates
+        // the current balance and sends the authoritative result.
+        if (action == ShopAction.BUY && !canRequestBuy(slot)) return;
         if (action == ShopAction.RETURN && !slot.canReturn()) return;
         SlotRef ref = new SlotRef(type, index);
         if (actionProgress.isBusy(ref)) return;
