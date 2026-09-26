@@ -127,7 +127,7 @@ public class PingMarkerEntity extends Entity {
                 return false;
             }
             if (local.getUUID().equals(owner)) {
-                return true;
+                return false;
             }
             var localTeam = net.ptcrys.fpsmatch.common.client.FPSMClient.getGlobalData().getTeamByUUID(local.getUUID());
             var ownerTeam = net.ptcrys.fpsmatch.common.client.FPSMClient.getGlobalData().getTeamByUUID(owner);

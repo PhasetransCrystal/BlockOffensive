@@ -26,20 +26,20 @@ import java.util.UUID;
 
 /**
  * Ping 标记实体渲染器：在实体位置绘制 CSGO 风格垂直光柱 + 顶部圆环。
- * <p>
  * 在实体渲染通道（LevelRenderer 实体循环）内直接 Tesselator 手绘，此时
  * PoseStack 已定位到实体原点，因此顶点使用局部坐标；关闭深度测试实现
  * 透墙可见（CSGO ping 风格）。
- * 仅对<b>同队玩家</b>渲染（敌队看不到，防信息泄露）。
+ * 仅对同队玩家渲染
  * 颜色按类型区分（普通=蓝 / 敌人=红 / 危险=橙 / 进攻=绿 / 防守=黄 / 支援=青）。
  */
 @OnlyIn(Dist.CLIENT)
 public class PingMarkerRenderer extends EntityRenderer<PingMarkerEntity> {
 
     private static final double BEAM_HEIGHT = 3.2D;
-    private static final double BEAM_HALF_WIDTH = 0.35D;
+    private static final double BEAM_HALF_WIDTH = 0.24D;
     private static final double RING_HALF = 0.55D;
-    private static final float BEAM_ALPHA = 0.85F;
+    private static final double RING_THICKNESS = 0.035D;
+    private static final float BEAM_ALPHA = 0.72F;
 
     public PingMarkerRenderer(EntityRendererProvider.Context context) {
         super(context);
@@ -57,8 +57,13 @@ public class PingMarkerRenderer extends EntityRenderer<PingMarkerEntity> {
         if (mc.level == null || mc.player == null) {
             return;
         }
+        UUID ownerId = entity.ownerId();
+        // Keep the owner's HUD ping, but don't draw its world-space beam over first-person view.
+        if (mc.player.getUUID().equals(ownerId)) {
+            return;
+        }
         // 同队过滤：敌队/观战者不渲染（防信息泄露）
-        boolean teammate = isTeammate(mc.player, entity.ownerId());
+        boolean teammate = isTeammate(mc.player, ownerId);
         // 诊断日志不应在每个渲染帧路径中输出。
         if (!teammate) {
             return;
@@ -98,24 +103,24 @@ public class PingMarkerRenderer extends EntityRenderer<PingMarkerEntity> {
         double ux = len > 1.0E-4D ? cameraX / len : 1.0D;
         double uz = len > 1.0E-4D ? cameraZ / len : 0.0D;
 
-        quad(buffer, -ux * BEAM_HALF_WIDTH, 0, -uz * BEAM_HALF_WIDTH,
-                ux * BEAM_HALF_WIDTH, 0, uz * BEAM_HALF_WIDTH,
-                ux * BEAM_HALF_WIDTH, top, uz * BEAM_HALF_WIDTH,
-                -ux * BEAM_HALF_WIDTH, top, -uz * BEAM_HALF_WIDTH, r, g, b, BEAM_ALPHA);
+        // A single billboard plane faces the camera. The old crossed quads looked like two
+        // separate vertical slabs while the player moved around the ping.
         quad(buffer, -uz * BEAM_HALF_WIDTH, 0, ux * BEAM_HALF_WIDTH,
                 uz * BEAM_HALF_WIDTH, 0, -ux * BEAM_HALF_WIDTH,
                 uz * BEAM_HALF_WIDTH, top, -ux * BEAM_HALF_WIDTH,
-                -uz * BEAM_HALF_WIDTH, top, ux * BEAM_HALF_WIDTH, r, g, b, BEAM_ALPHA * 0.6F);
+                -uz * BEAM_HALF_WIDTH, top, ux * BEAM_HALF_WIDTH, r, g, b, BEAM_ALPHA);
 
-        double ringHalf = RING_HALF;
-        quad(buffer, -ringHalf, top, -ringHalf,
-                ringHalf, top, -ringHalf,
-                ringHalf, top, ringHalf,
-                -ringHalf, top, ringHalf, r, g, b, 0.95F);
-        quad(buffer, -ringHalf, top, ringHalf,
-                ringHalf, top, ringHalf,
-                ringHalf, top, -ringHalf,
-                -ringHalf, top, -ringHalf, r, g, b, 0.95F);
+        double innerRadius = RING_HALF - RING_THICKNESS;
+        for (int i = 0; i < 32; i++) {
+            double angle0 = i * Math.PI * 2.0D / 32.0D;
+            double angle1 = (i + 1) * Math.PI * 2.0D / 32.0D;
+            quad(buffer,
+                    Math.cos(angle0) * RING_HALF, top, Math.sin(angle0) * RING_HALF,
+                    Math.cos(angle1) * RING_HALF, top, Math.sin(angle1) * RING_HALF,
+                    Math.cos(angle1) * innerRadius, top, Math.sin(angle1) * innerRadius,
+                    Math.cos(angle0) * innerRadius, top, Math.sin(angle0) * innerRadius,
+                    r, g, b, 0.95F);
+        }
     }
 
     private static void quad(BufferBuilder buffer,

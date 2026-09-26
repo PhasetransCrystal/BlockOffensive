@@ -349,6 +349,7 @@
   "blockoffensive.mvp.info.survive_under_fire": "%1$s clutched the round and earned MVP",
   "key.blockoffensive.radio_tactical.desc": "Open ping radial menu",
   "blockoffensive.ping.menu.title": "Ping Menu",
+  "blockoffensive.ping.menu.hint": "Move mouse to select, release Z to ping · Tap Z for a quick ping",
   "blockoffensive.ping.option.normal": "Ping",
   "blockoffensive.ping.option.enemy": "Enemy",
   "blockoffensive.ping.option.danger": "Danger",
