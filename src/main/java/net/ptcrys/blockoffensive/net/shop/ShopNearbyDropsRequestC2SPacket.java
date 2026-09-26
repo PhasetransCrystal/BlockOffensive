@@ -17,13 +17,26 @@ import java.util.function.Supplier;
 /** Client request to refresh the nearby-drop snapshot. */
 public final class ShopNearbyDropsRequestC2SPacket {
 
+    private final long requestId;
+
+    public ShopNearbyDropsRequestC2SPacket() {
+        this(0L);
+    }
+
+    public ShopNearbyDropsRequestC2SPacket(long requestId) {
+        this.requestId = requestId;
+    }
+
+    public long requestId() {
+        return requestId;
+    }
+
     public static void encode(ShopNearbyDropsRequestC2SPacket packet, FriendlyByteBuf buffer) {
-        // Keep this packet extensible while ensuring there is no client supplied
-        // radius, category or entity state to trust.
+        buffer.writeLong(packet.requestId);
     }
 
     public static ShopNearbyDropsRequestC2SPacket decode(FriendlyByteBuf buffer) {
-        return new ShopNearbyDropsRequestC2SPacket();
+        return new ShopNearbyDropsRequestC2SPacket(buffer.readLong());
     }
 
     public void handle(Supplier<NetworkEvent.Context> contextSupplier) {
@@ -38,7 +51,7 @@ public final class ShopNearbyDropsRequestC2SPacket {
             ShopCapability capability = team == null ? null : team.getCapabilityMap().get(ShopCapability.class).orElse(null);
             boolean allowed = map instanceof CSMap && capability != null && map.canUseShop(capability, player) && map.getMapTeams().getPlayerData(player)
                     .map(data -> data.isLivingOnServer()).orElse(false);
-            FPSMatch.sendToPlayer(player, ShopNearbyDropsS2CPacket.fromService(
+            FPSMatch.sendToPlayer(player, ShopNearbyDropsS2CPacket.fromService(requestId(),
                     ShopDropPickupService.collectNearby(
                             player,
                             ShopDropPickupService.DEFAULT_RADIUS,

@@ -33,10 +33,6 @@ public final class ShopActionProgress<K> {
         if (failed != null && failed.delta() < 0) failedRefunds.add(failed.slot());
     }
 
-    public List<Pending<K>> retries(int tick) {
-        return pending.values().stream().filter(p -> tick - p.sentTick() > 0 && tick - p.sentTick() < 120 && (tick - p.sentTick()) % 40 == 0).toList();
-    }
-
     public List<Long> expire(int tick) {
         List<Long> expired = new ArrayList<>();
         pending.values().removeIf(p -> {

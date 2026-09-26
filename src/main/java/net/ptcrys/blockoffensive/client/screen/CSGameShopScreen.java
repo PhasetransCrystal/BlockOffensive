@@ -230,10 +230,6 @@ public final class CSGameShopScreen extends ModernScreen {
     public void tick() {
         actionTick++;
         actionProgress.reconcile(ref -> FPSMClient.getGlobalData().getSlotData(ref.type().name(), ref.index()).boughtCount());
-        for (var retry : actionProgress.retries(actionTick)) {
-            PendingShopAction pending = pendingActions.get(retry.id());
-            if (pending != null) transmitShopAction(retry.id(), pending);
-        }
         for (long expired : actionProgress.expire(actionTick)) {
             pendingActions.remove(expired);
             if (minecraft != null && minecraft.player != null) minecraft.player.displayClientMessage(Component.translatable("blockoffensive.shop.request_timeout"), true);

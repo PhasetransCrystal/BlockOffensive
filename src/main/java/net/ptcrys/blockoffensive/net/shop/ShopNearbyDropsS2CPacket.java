@@ -16,9 +16,13 @@ import java.util.UUID;
 import java.util.function.Supplier;
 
 /** Server-authenticated nearby vanilla and match-drop snapshot for the shop UI. */
-public record ShopNearbyDropsS2CPacket(List<Drop> drops) {
+public record ShopNearbyDropsS2CPacket(long requestId, List<Drop> drops) {
 
     public static final int MAX_ENTRIES = ShopDropPickupService.MAX_NEARBY_ENTRIES;
+
+    public ShopNearbyDropsS2CPacket(List<Drop> drops) {
+        this(0L, drops);
+    }
 
     public ShopNearbyDropsS2CPacket {
         drops = drops == null ? List.of() : List.copyOf(drops);
@@ -27,14 +31,15 @@ public record ShopNearbyDropsS2CPacket(List<Drop> drops) {
         }
     }
 
-    public static ShopNearbyDropsS2CPacket fromService(List<ShopDropPickupService.NearbyDrop> drops) {
-        return new ShopNearbyDropsS2CPacket(drops == null ? List.of() : drops.stream()
+    public static ShopNearbyDropsS2CPacket fromService(long requestId, List<ShopDropPickupService.NearbyDrop> drops) {
+        return new ShopNearbyDropsS2CPacket(requestId, drops == null ? List.of() : drops.stream()
                 .map(drop -> new Drop(drop.entityId(), drop.stack(), drop.type(),
                         drop.x(), drop.y(), drop.z(), drop.pickupDelay()))
                 .toList());
     }
 
     public static void encode(ShopNearbyDropsS2CPacket packet, FriendlyByteBuf buffer) {
+        buffer.writeLong(packet.requestId());
         buffer.writeVarInt(packet.drops().size());
         for (Drop drop : packet.drops()) {
             buffer.writeUUID(drop.entityId());
@@ -48,6 +53,7 @@ public record ShopNearbyDropsS2CPacket(List<Drop> drops) {
     }
 
     public static ShopNearbyDropsS2CPacket decode(FriendlyByteBuf buffer) {
+        long requestId = buffer.readLong();
         int size = buffer.readVarInt();
         if (size < 0 || size > MAX_ENTRIES) {
             throw new IllegalArgumentException("Invalid nearby shop drop count: " + size);
@@ -63,7 +69,7 @@ public record ShopNearbyDropsS2CPacket(List<Drop> drops) {
                     buffer.readDouble(),
                     buffer.readVarInt()));
         }
-        return new ShopNearbyDropsS2CPacket(drops);
+        return new ShopNearbyDropsS2CPacket(requestId, drops);
     }
 
     public void handle(Supplier<NetworkEvent.Context> contextSupplier) {
