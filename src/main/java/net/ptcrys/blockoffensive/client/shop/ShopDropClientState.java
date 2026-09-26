@@ -15,17 +15,25 @@ import net.minecraftforge.fml.common.Mod;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicLong;
 
 /** Client cache only; it never mutates world entities or inventory. */
 @Mod.EventBusSubscriber(value = Dist.CLIENT, bus = Mod.EventBusSubscriber.Bus.FORGE)
 public final class ShopDropClientState {
 
     private static final List<ShopNearbyDropsS2CPacket.Drop> DROPS = new CopyOnWriteArrayList<>();
+    private static final AtomicLong NEXT_LIST_REQUEST = new AtomicLong();
+    private static long lastAcceptedRequest;
     private static long revision;
 
     private ShopDropClientState() {}
 
     public static void acceptNearby(ShopNearbyDropsS2CPacket packet) {
+        // Refreshes are polled while the screen is open. A delayed response
+        // from an older poll must not resurrect a drop that a newer snapshot
+        // (or a pickup result) already removed.
+        if (packet.requestId() > 0 && packet.requestId() < lastAcceptedRequest) return;
+        if (packet.requestId() > lastAcceptedRequest) lastAcceptedRequest = packet.requestId();
         boolean changed = DROPS.size() != packet.drops().size();
         if (!changed) for (int i = 0; i < DROPS.size(); i++) {
             var previous = DROPS.get(i);
@@ -59,6 +67,7 @@ public final class ShopDropClientState {
 
     public static void clear() {
         DROPS.clear();
+        lastAcceptedRequest = 0L;
         revision++;
     }
 
@@ -69,7 +78,7 @@ public final class ShopDropClientState {
 
     public static void requestRefresh() {
         NetworkPacketRegister.getChannelFromCache(ShopNearbyDropsRequestC2SPacket.class)
-                .sendToServer(new ShopNearbyDropsRequestC2SPacket());
+                .sendToServer(new ShopNearbyDropsRequestC2SPacket(NEXT_LIST_REQUEST.incrementAndGet()));
     }
 
     public static void requestPickup(UUID entityId) {

@@ -66,19 +66,6 @@ public record ShopDropPickupC2SPacket(UUID requestId, UUID entityId) {
                             ItemStack authoritativeStack) {
         FPSMatch.sendToPlayer(player, new ShopDropPickupResultS2CPacket(
                 requestId(), entityId(), result, reason, authoritativeStack));
-        // Refresh the authoritative nearby snapshot after every request, including
-        // failures, so stale client rows cannot remain actionable.
-        sendNearby(player);
-    }
-
-    private static void sendNearby(ServerPlayer player) {
-        Phase phase = phase(player);
-        FPSMatch.sendToPlayer(player, ShopNearbyDropsS2CPacket.fromService(
-                ShopDropPickupService.collectNearby(
-                        player,
-                        ShopDropPickupService.DEFAULT_RADIUS,
-                        ShopDropPickupC2SPacket::isAllowedDrop,
-                        phase.allowed())));
     }
 
     private static Phase phase(ServerPlayer player) {
