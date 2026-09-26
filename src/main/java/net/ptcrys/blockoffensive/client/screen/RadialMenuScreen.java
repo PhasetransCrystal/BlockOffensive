@@ -53,25 +53,35 @@ public class RadialMenuScreen extends Screen {
         int radius = 64;
         int btn = 36;
         var font = Minecraft.getInstance().font;
+        int selectedSlot = slotAt(mouseX, mouseY);
 
         for (int i = 0; i < SLOT_COUNT; i++) {
             double ang = Math.toRadians(-90.0D + i * (360.0D / SLOT_COUNT));
             int x = cx + (int) (Math.cos(ang) * radius) - btn / 2;
             int y = cy + (int) (Math.sin(ang) * radius) - btn / 2;
-            boolean over = mouseX >= x && mouseX <= x + btn && mouseY >= y && mouseY <= y + btn;
-            int bg = ((over ? 0x88 : 0x4D) << 24) | (COLORS[i] & 0xFFFFFF);
+            boolean over = selectedSlot == i;
+            int bg = ((over ? 0xCC : 0x55) << 24) | (COLORS[i] & 0xFFFFFF);
             graphics.fill(x, y, x + btn, y + btn, bg);
             // 边框
-            graphics.fill(x, y, x + btn, y + 1, 0x99FFFFFF);
-            graphics.fill(x, y + btn - 1, x + btn, y + btn, 0x99FFFFFF);
-            graphics.fill(x, y, x + 1, y + btn, 0x99FFFFFF);
-            graphics.fill(x + btn - 1, y, x + btn, y + btn, 0x99FFFFFF);
+            int border = over ? 0xFFFFFFFF : 0x99FFFFFF;
+            graphics.fill(x, y, x + btn, y + 1, border);
+            graphics.fill(x, y + btn - 1, x + btn, y + btn, border);
+            graphics.fill(x, y, x + 1, y + btn, border);
+            graphics.fill(x + btn - 1, y, x + btn, y + btn, border);
             // 标签（走翻译）
             String label = Component.translatable(LABEL_KEYS[i]).getString();
             int tw = font.width(label);
             graphics.drawString(font, label,
                     cx + (int) (Math.cos(ang) * radius) - tw / 2,
                     cy + (int) (Math.sin(ang) * radius) + btn / 2 + 4, 0xFFFFFFFF);
+        }
+
+        String hint = Component.translatable("blockoffensive.ping.menu.hint").getString();
+        graphics.drawString(font, hint, cx - font.width(hint) / 2, 12, 0xFFFFFFFF);
+        if (selectedSlot >= 0) {
+            String selected = Component.translatable(LABEL_KEYS[selectedSlot]).getString();
+            graphics.drawString(font, selected, cx - font.width(selected) / 2, cy - font.lineHeight / 2,
+                    COLORS[selectedSlot]);
         }
     }
 
@@ -91,7 +101,7 @@ public class RadialMenuScreen extends Screen {
 
     /**
      * CSGO 式交互：按住 Z 打开轮盘后，移动鼠标指向方向，<b>松开 Z</b> 即发送所选标点。
-     * 鼠标不在任何选项上（快速点按）则关闭不发送。
+     * 鼠标不在任何选项上（快速点按）则发送默认普通标记。
      */
     @Override
     public boolean keyReleased(int keyCode, int scanCode, int modifiers) {
@@ -101,9 +111,7 @@ public class RadialMenuScreen extends Screen {
                 double mx = mc.mouseHandler.xpos() / mc.getWindow().getGuiScale();
                 double my = mc.mouseHandler.ypos() / mc.getWindow().getGuiScale();
                 int slot = slotAt(mx, my);
-                if (slot >= 0) {
-                    fire(slot);
-                }
+                fire(slot >= 0 ? slot : 0);
             }
             this.onClose();
             return true;

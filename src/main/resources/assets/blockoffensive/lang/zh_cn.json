@@ -349,6 +349,7 @@
   "blockoffensive.mvp.info.survive_under_fire": "%1$s 残局存活并成为本回合 MVP",
   "key.blockoffensive.radio_tactical.desc": "打开标记轮盘 (Ping)",
   "blockoffensive.ping.menu.title": "标记轮盘",
+  "blockoffensive.ping.menu.hint": "移动鼠标选择，松开 Z 标记 · 快速轻点发送普通标记",
   "blockoffensive.ping.option.normal": "标记",
   "blockoffensive.ping.option.enemy": "敌人",
   "blockoffensive.ping.option.danger": "危险",

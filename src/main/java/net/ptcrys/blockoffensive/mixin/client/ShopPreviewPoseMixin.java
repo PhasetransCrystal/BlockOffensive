@@ -17,7 +17,7 @@ public class ShopPreviewPoseMixin {
     private void blockoffensive$shopPose(LivingEntity entity, float swing, float amount,
                                          float age, float yaw, float pitch, CallbackInfo ci) {
         if (entity instanceof ShopPlayerPreview preview) {
-            preview.applyPresentationPose((PlayerModel<?>) (Object) this);
+            preview.applyPresentationPose((PlayerModel<?>) (Object) this, age);
         }
     }
 }
