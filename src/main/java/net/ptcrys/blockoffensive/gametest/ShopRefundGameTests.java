@@ -1,11 +1,17 @@
 package net.ptcrys.blockoffensive.gametest;
 
+import net.ptcrys.blockoffensive.map.CSGameMap;
 import net.ptcrys.blockoffensive.map.shop.ItemType;
+import net.ptcrys.fpsmatch.common.capability.team.ShopCapability;
+import net.ptcrys.fpsmatch.common.packet.shop.ShopDataSlotS2CPacket;
 import net.ptcrys.fpsmatch.common.shop.functional.ReturnGoodsModule;
+import net.ptcrys.fpsmatch.core.data.AreaData;
+import net.ptcrys.fpsmatch.core.shop.FPSMShop;
 import net.ptcrys.fpsmatch.core.shop.ShopAction;
 import net.ptcrys.fpsmatch.core.shop.ShopData;
 import net.ptcrys.fpsmatch.core.shop.slot.ShopSlot;
 
+import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.network.chat.Component;
@@ -18,14 +24,72 @@ import net.minecraftforge.gametest.PrefixGameTestTemplate;
 
 import com.google.common.collect.ImmutableList;
 import com.mojang.authlib.GameProfile;
+import com.mojang.serialization.JsonOps;
 
 import java.util.EnumMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
 @GameTestHolder("blockoffensive")
 @PrefixGameTestTemplate(false)
 public final class ShopRefundGameTests {
+
+    @GameTest(template = "empty")
+    @SuppressWarnings("unchecked")
+    public static void legacyShopNameUsesOwningTeamForRefundSnapshots(GameTestHelper helper) {
+        CSGameMap map = new CSGameMap(helper.getLevel(), "shop_test_" + UUID.randomUUID().toString().substring(0, 8),
+                new AreaData(helper.absolutePos(BlockPos.ZERO), helper.absolutePos(new BlockPos(8, 8, 8)))) {
+
+            @Override
+            public void loadConfig() {}
+        };
+        FakePlayer player = player(helper, "ShopIdentityTest");
+        try {
+            FPSMShop<ItemType> legacy = FPSMShop.create(ItemType.class, "test", 800);
+            legacy.setDefaultShopDataItemStack(ItemType.EQUIPMENT.name(), 0, new ItemStack(Items.APPLE));
+            legacy.setDefaultShopDataCost(ItemType.EQUIPMENT.name(), 0, 100);
+            legacy.addArea(new AreaData(BlockPos.ZERO, new BlockPos(8, 8, 8)));
+            var saved = legacy.codec.encodeStart(JsonOps.INSTANCE, legacy).getOrThrow(false, message -> {});
+            var decoded = legacy.codec.parse(JsonOps.INSTANCE, saved).getOrThrow(false, message -> {});
+
+            for (var team : List.of(map.getCT(), map.getT())) {
+                ShopCapability cap = team.getCapabilityMap().get(ShopCapability.class).orElseThrow();
+                cap.write(decoded);
+                FPSMShop<ItemType> shop = (FPSMShop<ItemType>) cap.getShop();
+                helper.assertTrue(shop.getName().equals(team.name), "loaded legacy shop must use the owning team name");
+                helper.assertTrue(shop.getStartMoney() == 800 && shop.getAreas().size() == 1,
+                        "normalizing a legacy shop must preserve economy and purchase areas");
+                var data = shop.getPlayerShopData(player);
+                helper.assertTrue(data.handleButton(player, ItemType.EQUIPMENT, 0, ShopAction.BUY).accepted(),
+                        "loaded shop must allow buying its configured item");
+                ShopSlot slot = data.getShopSlotsByType(ItemType.EQUIPMENT).get(0);
+                var bought = new ShopDataSlotS2CPacket(shop.getName(), ItemType.EQUIPMENT, slot);
+                helper.assertTrue(bought.shopName.equals(team.name) && bought.boughtCount == 1 && !bought.locked,
+                        "purchase snapshot must pass the client team filter and expose refund eligibility");
+                helper.assertTrue(data.handleButton(player, ItemType.EQUIPMENT, 0, ShopAction.RETURN).accepted(),
+                        "newly purchased item must be refundable");
+                var refunded = new ShopDataSlotS2CPacket(shop.getName(), ItemType.EQUIPMENT, slot);
+                helper.assertTrue(refunded.shopName.equals(team.name) && refunded.boughtCount == 0 && data.getMoney() == 800,
+                        "refund snapshot must clear the marker and restore the balance");
+
+                var replacementData = legacy.getPlayerShopData(player);
+                helper.assertTrue(replacementData.handleButton(player, ItemType.EQUIPMENT, 0, ShopAction.BUY).accepted(),
+                        "replacement shop must have an existing purchase to preserve");
+                cap.setShop(legacy);
+                FPSMShop<ItemType> replacement = (FPSMShop<ItemType>) cap.getShop();
+                helper.assertTrue(replacement.getName().equals(team.name) && replacement.getPlayerShopData(player) == replacementData && replacementData.getMoney() == 700,
+                        "replacing a shop must normalize its team identity without losing player state");
+                helper.assertTrue(replacementData.handleButton(player, ItemType.EQUIPMENT, 0, ShopAction.RETURN).accepted(),
+                        "preserved purchases must remain refundable after shop replacement");
+            }
+            helper.assertTrue(decoded.getName().equals("test"), "normalizing one team must not rename another team's source");
+        } finally {
+            player.getInventory().clearContent();
+            map.getMapTeams().shutdown(helper.getLevel().getScoreboard());
+        }
+        helper.succeed();
+    }
 
     @GameTest(template = "empty")
     public static void copiedSlotRefundsChangedItem(GameTestHelper helper) {
