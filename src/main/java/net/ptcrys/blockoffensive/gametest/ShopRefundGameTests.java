@@ -6,9 +6,9 @@ import net.ptcrys.fpsmatch.core.shop.ShopAction;
 import net.ptcrys.fpsmatch.core.shop.ShopData;
 import net.ptcrys.fpsmatch.core.shop.slot.ShopSlot;
 
-import net.minecraft.network.chat.Component;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraftforge.common.util.FakePlayer;
@@ -16,8 +16,8 @@ import net.minecraftforge.common.util.FakePlayerFactory;
 import net.minecraftforge.gametest.GameTestHolder;
 import net.minecraftforge.gametest.PrefixGameTestTemplate;
 
-import com.mojang.authlib.GameProfile;
 import com.google.common.collect.ImmutableList;
+import com.mojang.authlib.GameProfile;
 
 import java.util.EnumMap;
 import java.util.Map;

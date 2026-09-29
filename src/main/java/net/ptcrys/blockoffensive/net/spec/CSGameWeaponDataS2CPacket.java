@@ -10,6 +10,7 @@ import java.util.*;
 import java.util.function.Supplier;
 
 public record CSGameWeaponDataS2CPacket(Map<UUID, WeaponData> weaponDataMap) {
+
     private static final int MAX_ENTRIES = 64;
     private static final int MAX_WEAPONS_PER_PLAYER = 64;
     private static final int MAX_VALUES_PER_WEAPON = 32;
