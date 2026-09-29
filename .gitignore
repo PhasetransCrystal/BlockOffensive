@@ -160,3 +160,6 @@ docs/*
 # Misc
 .tmp-readme-wiki-link
 .wiki
+
+# Quality Playbook artifacts
+quality/

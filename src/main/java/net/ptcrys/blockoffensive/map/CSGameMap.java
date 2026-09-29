@@ -1834,6 +1834,9 @@ public class CSGameMap extends CSMap {
         if (!isStart || sender == null) {
             return;
         }
+        if (getMapTeams().getTeamByPlayer(sender).isEmpty() || !getMapTeams().getPlayerData(sender).map(PlayerData::isLiving).orElse(false)) {
+            return;
+        }
         // 类型和坐标先校验，非法请求不应消耗合法 Ping 的频率配额。
         if (type < 0 || type > 5 || !Double.isFinite(x) || !Double.isFinite(y) || !Double.isFinite(z)) {
             return;

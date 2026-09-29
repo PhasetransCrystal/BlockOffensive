@@ -11,6 +11,10 @@ import java.util.function.Supplier;
 
 public record CSGameWeaponDataS2CPacket(Map<UUID, WeaponData> weaponDataMap) {
 
+    private static final int MAX_ENTRIES = 64;
+    private static final int MAX_WEAPONS_PER_PLAYER = 64;
+    private static final int MAX_VALUES_PER_WEAPON = 32;
+
     public static void encode(CSGameWeaponDataS2CPacket packet, FriendlyByteBuf buf) {
         buf.writeMap(packet.weaponDataMap, FriendlyByteBuf::writeUUID,
                 (b, weaponData) -> {
@@ -22,17 +26,24 @@ public record CSGameWeaponDataS2CPacket(Map<UUID, WeaponData> weaponDataMap) {
     }
 
     public static CSGameWeaponDataS2CPacket decode(FriendlyByteBuf buf) {
-        Map<UUID, WeaponData> weaponDataMap = buf.readMap(
-                FriendlyByteBuf::readUUID,
-                b -> {
-                    Map<String, List<String>> weaponData = b.readMap(
-                            FriendlyByteBuf::readUtf,
-                            b1 -> b1.readList(FriendlyByteBuf::readUtf));
-                    boolean hasHelmet = b.readBoolean();
-                    int durability = b.readInt();
-
-                    return new WeaponData(weaponData, hasHelmet, durability);
-                });
+        int outerSize = buf.readVarInt();
+        if (outerSize < 0 || outerSize > MAX_ENTRIES) throw new IllegalArgumentException("weapon player count");
+        Map<UUID, WeaponData> weaponDataMap = new LinkedHashMap<>();
+        for (int i = 0; i < outerSize; i++) {
+            UUID owner = buf.readUUID();
+            int weaponCount = buf.readVarInt();
+            if (weaponCount < 0 || weaponCount > MAX_WEAPONS_PER_PLAYER) throw new IllegalArgumentException("weapon count");
+            Map<String, List<String>> weaponData = new LinkedHashMap<>();
+            for (int j = 0; j < weaponCount; j++) {
+                String weapon = buf.readUtf();
+                int valueCount = buf.readVarInt();
+                if (valueCount < 0 || valueCount > MAX_VALUES_PER_WEAPON) throw new IllegalArgumentException("weapon values");
+                List<String> values = new ArrayList<>(valueCount);
+                for (int k = 0; k < valueCount; k++) values.add(buf.readUtf());
+                weaponData.put(weapon, values);
+            }
+            weaponDataMap.put(owner, new WeaponData(weaponData, buf.readBoolean(), buf.readInt()));
+        }
         return new CSGameWeaponDataS2CPacket(weaponDataMap);
     }
 

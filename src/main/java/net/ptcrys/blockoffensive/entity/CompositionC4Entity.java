@@ -297,6 +297,9 @@ public class CompositionC4Entity extends BlastBombEntity {
 
     public void setFuse(int pLife) {
         this.fuse = pLife;
+        if (this.map == null) {
+            return;
+        }
         this.map.getMapTeams().getSpecPlayers().forEach((pUUID) -> {
             Optional<ServerPlayer> receiver = FPSMCore.getInstance().getPlayerByUUID(pUUID);
             receiver.ifPresent(player -> BlockOffensive.INSTANCE.send(PacketDistributor.PLAYER.with(() -> player), new BombFuseS2CPacket(pLife, BOConfig.common.fuseTime.get())));
