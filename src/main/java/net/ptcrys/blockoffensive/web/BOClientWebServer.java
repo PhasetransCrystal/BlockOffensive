@@ -16,6 +16,7 @@ import com.sun.net.httpserver.HttpServer;
 
 import java.io.IOException;
 import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
 import java.net.InetSocketAddress;
 import java.util.HashMap;
 import java.util.Map;
@@ -134,8 +135,8 @@ public class BOClientWebServer {
 
     private static void sendResponse(HttpExchange exchange, Map<String, Object> response) throws IOException {
         String jsonResponse = gson.toJson(response);
-        byte[] responseBytes = jsonResponse.getBytes();
-        exchange.getResponseHeaders().set("Content-Type", "application/json");
+        byte[] responseBytes = jsonResponse.getBytes(StandardCharsets.UTF_8);
+        exchange.getResponseHeaders().set("Content-Type", "application/json; charset=UTF-8");
         exchange.sendResponseHeaders(200, responseBytes.length);
 
         try (OutputStream os = exchange.getResponseBody()) {
