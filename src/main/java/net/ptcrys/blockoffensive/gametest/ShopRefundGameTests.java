@@ -40,6 +40,7 @@ public final class ShopRefundGameTests {
     public static void legacyShopNameUsesOwningTeamForRefundSnapshots(GameTestHelper helper) {
         CSGameMap map = new CSGameMap(helper.getLevel(), "shop_test_" + UUID.randomUUID().toString().substring(0, 8),
                 new AreaData(helper.absolutePos(BlockPos.ZERO), helper.absolutePos(new BlockPos(8, 8, 8)))) {
+
             @Override
             public void loadConfig() {}
         };
@@ -77,9 +78,7 @@ public final class ShopRefundGameTests {
                         "replacement shop must have an existing purchase to preserve");
                 cap.setShop(legacy);
                 FPSMShop<ItemType> replacement = (FPSMShop<ItemType>) cap.getShop();
-                helper.assertTrue(replacement.getName().equals(team.name)
-                                && replacement.getPlayerShopData(player) == replacementData
-                                && replacementData.getMoney() == 700,
+                helper.assertTrue(replacement.getName().equals(team.name) && replacement.getPlayerShopData(player) == replacementData && replacementData.getMoney() == 700,
                         "replacing a shop must normalize its team identity without losing player state");
                 helper.assertTrue(replacementData.handleButton(player, ItemType.EQUIPMENT, 0, ShopAction.RETURN).accepted(),
                         "preserved purchases must remain refundable after shop replacement");
