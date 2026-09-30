@@ -11,7 +11,6 @@ import net.ptcrys.fpsmatch.common.packet.FPSMSoundPlayS2CPacket;
 import net.ptcrys.fpsmatch.core.FPSMCore;
 import net.ptcrys.fpsmatch.core.item.BlastBombItem;
 import net.ptcrys.fpsmatch.core.map.BaseMap;
-import net.ptcrys.fpsmatch.core.map.BlastBombState;
 import net.ptcrys.fpsmatch.core.team.ServerTeam;
 
 import net.minecraft.ChatFormatting;
@@ -151,7 +150,7 @@ public class CompositionC4 extends Item implements BlastBombItem {
             return InteractionResultHolder.pass(stack);
         }
 
-        boolean canPlace = map.checkCanPlacingBombs(team.getFixedName()) && map.blastState() == BlastBombState.NONE && player.onGround();
+        boolean canPlace = map.canPlantBomb(player);
         boolean inBombArea = map.checkPlayerIsInBombArea(player);
 
         if (canPlace && inBombArea) {
@@ -234,15 +233,18 @@ public class CompositionC4 extends Item implements BlastBombItem {
 
         if (!(baseMap instanceof CSGameMap map)) return stack;
 
-        if (!map.checkPlayerIsInBombArea(player)) {
-            player.displayClientMessage(Component.translatable("blockoffensive.item.c4.use.fail.notInArea"), true);
+        if (!map.canPlantBomb(player) || !map.checkPlayerIsInBombArea(player)) {
+            player.displayClientMessage(Component.translatable("blockoffensive.item.c4.use.fail"), true);
             return stack;
         }
 
         // 放置C4实体
         CompositionC4Entity c4 = new CompositionC4Entity(
                 level, player.getX(), player.getY() + 0.25, player.getZ(), player, map);
-        level.addFreshEntity(c4);
+        if (!level.addFreshEntity(c4)) {
+            map.setBombEntity(null);
+            return stack;
+        }
         map.recordBombPlanted(player);
 
         // 播放放置音效
@@ -255,6 +257,7 @@ public class CompositionC4 extends Item implements BlastBombItem {
                         .flatMap(ShopCapability::getShopSafe))
                 .ifPresent(shop -> {
                     shop.getPlayerShopData(player.getUUID()).addMoney(300);
+                    shop.syncShopMoneyData(player.getUUID());
                 });
 
         // 通知所有玩家

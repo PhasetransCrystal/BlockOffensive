@@ -274,7 +274,7 @@
   "setting.cs.compensationBase": "Compensation Base",
   "setting.cs.compensationBase.desc": "Base value for loser money compensation calculation",
   "setting.cs.tDeathRewardPer": "T Death Reward Per",
-  "setting.cs.tDeathRewardPer.desc": "Extra money reward per T team death",
+  "setting.cs.tDeathRewardPer.desc": "Extra money for each CT player per T eliminated by the CT team",
   "blockoffensive.shop.result.invalid_request": "Invalid shop request.",
   "blockoffensive.shop.result.shop_unavailable": "The shop is unavailable.",
   "blockoffensive.shop.result.not_allowed": "You cannot use the shop now.",
