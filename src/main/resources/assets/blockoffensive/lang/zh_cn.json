@@ -274,7 +274,7 @@
   "setting.cs.compensationBase": "补偿基数",
   "setting.cs.compensationBase.desc": "失败方补偿金钱的基数计算值",
   "setting.cs.tDeathRewardPer": "T阵营死亡奖励",
-  "setting.cs.tDeathRewardPer.desc": "T阵营每死亡一人给予的额外金钱奖励",
+  "setting.cs.tDeathRewardPer.desc": "CT每击杀一名T时给予每名CT队员的额外金钱奖励",
   "blockoffensive.shop.result.invalid_request": "无效的商店请求。",
   "blockoffensive.shop.result.shop_unavailable": "商店当前不可用。",
   "blockoffensive.shop.result.not_allowed": "现在不能使用商店。",

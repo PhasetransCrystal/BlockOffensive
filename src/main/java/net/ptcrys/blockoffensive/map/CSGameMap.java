@@ -40,6 +40,7 @@ import net.ptcrys.fpsmatch.common.drop.DropType;
 import net.ptcrys.fpsmatch.common.packet.FPSMSoundPlayS2CPacket;
 import net.ptcrys.fpsmatch.common.packet.FPSMusicPlayS2CPacket;
 import net.ptcrys.fpsmatch.common.packet.FPSMusicStopS2CPacket;
+import net.ptcrys.fpsmatch.compat.gun.GunTabTypeEnum;
 import net.ptcrys.fpsmatch.core.FPSMCore;
 import net.ptcrys.fpsmatch.core.capability.CapabilityMap;
 import net.ptcrys.fpsmatch.core.capability.map.MapCapability;
@@ -88,8 +89,10 @@ import net.minecraft.world.scores.Team;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.network.PacketDistributor;
+import net.minecraftforge.registries.ForgeRegistries;
 
 import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 import com.tacz.guns.entity.EntityKineticBullet;
@@ -176,6 +179,7 @@ public class CSGameMap extends CSMap {
     private WinnerReason lastWinnerReason = WinnerReason.ACED;
     private UUID lastBombPlanter;
     private UUID lastBombDefuser;
+    private int ctEliminationsThisRound;
     private UUID pendingFinalKillAssist;
 
     private final Map<UUID, Integer> knifeCache = new HashMap<>();
@@ -252,6 +256,8 @@ public class CSGameMap extends CSMap {
     @Override
     public ServerTeam addTeam(TeamData data) {
         ServerTeam team = super.addTeam(data);
+        team.getCapabilityMap().get(CompensationCapability.class)
+                .ifPresent(cap -> cap.withSetter(value -> Math.max(0, Math.min(value, CSEconomyRules.MAX_LOSS_FACTOR))));
         team.getCapabilityMap().get(ShopCapability.class).ifPresent(cap -> cap.initialize("cs", startMoney.get()));
         return team;
     }
@@ -267,7 +273,7 @@ public class CSGameMap extends CSMap {
         roundTimeLimit = this.addSetting("match", "roundTimeLimit", 2300);
         startMoney = this.addSetting("eco", "startEconomy", 800);
         defaultLoserEconomy = this.addSetting("eco", "defaultLoserEconomy", 1400);
-        defuseBonus = this.addSetting("eco", "defuseEconomy", 600);
+        defuseBonus = this.addSetting("eco", "defuseEconomy", 300);
         compensationBase = this.addSetting("eco", "compensationBase", 500);
         tDeathRewardPer = this.addSetting("eco", "tDeathRewardPer", 50);
         closeShopTime = this.addSetting("eco", "closeShopTime", 200);
@@ -327,7 +333,11 @@ public class CSGameMap extends CSMap {
 
     @Override
     public void configFromJson(JsonElement json) {
-        super.configFromJson(json);
+        JsonObject config = json.getAsJsonObject().deepCopy();
+        if (config.has("defuseEconomy") && config.get("defuseEconomy").getAsInt() == 600) {
+            config.addProperty("defuseEconomy", 300);
+        }
+        super.configFromJson(config);
         disableEnemyGlow();
     }
 
@@ -349,8 +359,14 @@ public class CSGameMap extends CSMap {
     }
 
     public int getNextRoundMinMoney(ServerTeam team) {
+        int roundsPlayed = getCT().getScores() + getT().getScores();
+        if (!isOvertime && (roundsPlayed == 0 || roundsPlayed == winnerRound.get() - 1)) {
+            return CSEconomyRules.PISTOL_LOSS_REWARD;
+        }
         CompensationCapability compensation = getCompensation(team);
-        return calculateNextRoundMinMoney(compensation == null ? null : compensation.getFactor());
+        return CSEconomyRules.calculateNextRoundMinMoney(
+                compensation == null ? null : compensation.getFactor(),
+                defaultLoserEconomy.get(), compensationBase.get());
     }
 
     public static int calculateNextRoundMinMoney(Integer compensationFactor) {
@@ -471,6 +487,7 @@ public class CSGameMap extends CSMap {
         this.isWaitingWinner = false;
         this.currentPauseTime = 0;
         this.isShopLocked = false;
+        this.ctEliminationsThisRound = 0;
     }
 
     /**
@@ -480,7 +497,10 @@ public class CSGameMap extends CSMap {
         mapTeams.getNormalTeams().forEach(team -> {
             team.setScores(0);
             CapabilityMap<BaseTeam, TeamCapability> map = team.getCapabilityMap();
-            map.get(CompensationCapability.class).ifPresentOrElse(cap -> cap.setFactor(0), () -> FPSMatch.LOGGER.error("CSGameMap {} Compensation fail set to {}", this.getMapName(), 0));
+            map.get(CompensationCapability.class).ifPresentOrElse(cap -> {
+                cap.withSetter(value -> Math.max(0, Math.min(value, CSEconomyRules.MAX_LOSS_FACTOR)));
+                cap.setFactor(0);
+            }, () -> FPSMatch.LOGGER.error("CSGameMap {} Compensation fail set to {}", this.getMapName(), 0));
             int money = startMoney.get();
             map.get(ShopCapability.class).ifPresentOrElse(cap -> cap.setStartMoney(money), () -> FPSMatch.LOGGER.error("CSGameMap {} {} Shop fail set start money {}", this.getMapName(), team.name, money));
             // 重置队伍内所有玩家数据
@@ -761,6 +781,33 @@ public class CSGameMap extends CSMap {
         this.sendNewRoundVoice();
     }
 
+    @Override
+    public int gerRewardByGunId(ResourceLocation gunId) {
+        String path = gunId.getPath().toLowerCase(Locale.ROOT);
+        if (path.contains("zeus") || path.endsWith("awp")) {
+            return sniperKillEconomy.get();
+        }
+        if (path.endsWith("p90")) {
+            return defaultKillEconomy.get();
+        }
+        if (path.endsWith("xm1014")) {
+            return smgKillEconomy.get();
+        }
+        if (FPSMUtil.getGunTypeByGunId(gunId).filter(type -> type == GunTabTypeEnum.SNIPER).isPresent()) {
+            return defaultKillEconomy.get();
+        }
+        return super.gerRewardByGunId(gunId);
+    }
+
+    @Override
+    public int getRewardByItem(ItemStack itemStack) {
+        ResourceLocation itemId = ForgeRegistries.ITEMS.getKey(itemStack.getItem());
+        if (itemId != null && itemId.getPath().toLowerCase(Locale.ROOT).contains("zeus")) {
+            return sniperKillEconomy.get();
+        }
+        return super.getRewardByItem(itemStack);
+    }
+
     /**
      * 处理回合胜利逻辑
      * 
@@ -981,10 +1028,9 @@ public class CSGameMap extends CSMap {
      * 处理胜利方经济奖励
      */
     private void processWinnerEconomicReward(@NotNull ServerTeam winTeam, WinnerReason reason) {
-        // CS2：拆弹获胜方（CT）额外获得拆弹奖励
         boolean defuseBonusEligible = reason == WinnerReason.DEFUSE_BOMB && winTeam.getFixedName().equalsIgnoreCase(getCT().getFixedName());
         winTeam.getPlayerList().forEach(uuid -> {
-            int money = reason.getWinMoney(this) + (defuseBonusEligible ? defuseBonus.get() : 0);
+            int money = reason.getWinMoney(this) + (defuseBonusEligible && uuid.equals(lastBombDefuser) ? defuseBonus.get() : 0);
             ShopCapability.getShop(winTeam).ifPresent(shop -> shop.addMoney(uuid, money));
 
             getPlayerByUUID(uuid).ifPresent(player -> sendMoneyRewardMessage(player, money, reason.name()));
@@ -996,19 +1042,18 @@ public class CSGameMap extends CSMap {
      */
     private void processLoserEconomicReward(@NotNull ServerTeam loserTeam, @NotNull WinnerReason reason) {
         int compensationFactor = getCompensation(loserTeam).getFactor();
-
-        // 基础经济（拆弹奖励已按 CS2 移给胜方 CT，败方不再额外发放）
         int baseEconomy = defaultLoserEconomy.get();
-        // 总失败补偿 = 基础经济 + 连败补偿（连败数 = 补偿因子 - 1，与商店显示口径一致）
-        int lossStreak = Math.max(0, compensationFactor - 1);
-        int totalLossCompensation = baseEconomy + (compensationBase.get() * lossStreak);
-        String rewardDesc = baseEconomy + " + " + compensationBase.get() + " * " + lossStreak;
+        int totalRoundsPlayed = getCT().getScores() + getT().getScores();
+        boolean pistolRound = !isOvertime && (totalRoundsPlayed == 1 || totalRoundsPlayed == winnerRound.get());
+        int lossReward = CSEconomyRules.calculateLossReward(compensationFactor, baseEconomy, compensationBase.get(), pistolRound);
+        boolean plantedBombLoss = loserTeam.getFixedName().equalsIgnoreCase(getT().getFixedName()) && reason == WinnerReason.DEFUSE_BOMB;
+        int totalLossCompensation = lossReward + (plantedBombLoss ? CSEconomyRules.PLANTED_BOMB_LOSS_BONUS : 0);
 
         loserTeam.getPlayerList().forEach(uuid -> {
             // 仅在符合条件时发放补偿
             boolean shouldGiveCompensation = shouldLoserGetCompensation(loserTeam, uuid, reason);
             int finalReward = shouldGiveCompensation ? totalLossCompensation : 0;
-            String finalDesc = shouldGiveCompensation ? rewardDesc : "timeout living";
+            String finalDesc = shouldGiveCompensation ? reason.name() : "timeout living";
 
             ShopCapability.getShop(loserTeam).ifPresent(shop -> shop.addMoney(uuid, finalReward));
 
@@ -1033,14 +1078,8 @@ public class CSGameMap extends CSMap {
     }
 
     private void processCTTeamExtraReward() {
-        ServerTeam tTeam = getT();
         ServerTeam ctTeam = getCT();
-
-        long deadTCount = tTeam.getPlayersData().stream()
-                .filter(data -> !data.isLivingOnServer())
-                .count();
-
-        int extraReward = (int) deadTCount * tDeathRewardPer.get();
+        int extraReward = ctEliminationsThisRound * tDeathRewardPer.get();
         if (extraReward <= 0) {
             return;
         }
@@ -1049,7 +1088,7 @@ public class CSGameMap extends CSMap {
             ShopCapability.getShop(ctTeam).ifPresent(shop -> shop.addMoney(uuid, extraReward));
         });
 
-        ctTeam.sendMessage(Component.translatable("blockoffensive.map.cs.reward.team", extraReward, deadTCount));
+        ctTeam.sendMessage(Component.translatable("blockoffensive.map.cs.reward.team", extraReward, ctEliminationsThisRound));
     }
 
     private MvpReason processMvpLogic(@NotNull ServerTeam winnerTeam, @NotNull WinnerReason reason, @NotNull MapTeams mapTeams) {
@@ -1162,8 +1201,7 @@ public class CSGameMap extends CSMap {
     }
 
     private void checkLoseStreaks(ServerTeam winTeam, @NotNull List<ServerTeam> loseTeams) {
-        // 胜方连败计数清零：CS 规则中获胜后连败补偿重置
-        winTeam.getCapabilityMap().get(CompensationCapability.class).ifPresentOrElse(cap -> cap.setFactor(0), () -> FPSMatch.LOGGER.error("Failed to reset Compensation capability"));
+        winTeam.getCapabilityMap().get(CompensationCapability.class).ifPresentOrElse(cap -> cap.reduce(1), () -> FPSMatch.LOGGER.error("Failed to reduce Compensation capability"));
 
         loseTeams.forEach(team -> team.getCapabilityMap().get(CompensationCapability.class).ifPresentOrElse(cap -> cap.add(1), () -> FPSMatch.LOGGER.error("Failed to add Compensation capability")));
     }
@@ -1179,6 +1217,7 @@ public class CSGameMap extends CSMap {
             this.roundStarted = false;
             this.lastBombPlanter = null;
             this.lastBombDefuser = null;
+            this.ctEliminationsThisRound = 0;
             this.roundIncendiaryDamage.clear();
             this.roundExplosiveDamage.clear();
             this.roundClutchCandidates.clear();
@@ -1441,6 +1480,8 @@ public class CSGameMap extends CSMap {
         if (shouldSwitchTeams) {
             isWaiting = true;
             switchTeams();
+            getCT().getCapabilityMap().get(CompensationCapability.class).ifPresent(cap -> cap.setFactor(0));
+            getT().getCapabilityMap().get(CompensationCapability.class).ifPresent(cap -> cap.setFactor(0));
         }
 
         return shouldSwitchTeams;
@@ -1731,6 +1772,12 @@ public class CSGameMap extends CSMap {
                 .orElse(false);
     }
 
+    public boolean canPlantBomb(Player player) {
+        return isStart && roundStarted && !isWaitingWinner && !player.isSpectator() && blastState() == BlastBombState.NONE && player.onGround() && getMapTeams().getTeamByPlayer(player)
+                .map(team -> checkCanPlacingBombs(team.getFixedName()))
+                .orElse(false);
+    }
+
     public void setBombEntity(@Nullable BlastBombEntity bomb) {
         CapabilityMap.getMapCapability(this, DemolitionModeCapability.class)
                 .ifPresent(cap -> cap.setBombEntity(bomb));
@@ -1885,6 +1932,10 @@ public class CSGameMap extends CSMap {
     @Override
     public void handleDeath(DeathContext context) {
         ServerPlayer dead = context.getDeadPlayer();
+        ServerPlayer attacker = context.getAttacker();
+        if (isStart && roundStarted && !isWaitingWinner && attacker != null && !(context.getDamageSource().getDirectEntity() instanceof CompositionC4Entity) && getMapTeams().getTeamByPlayer(attacker).filter(getCT()::equals).isPresent() && getMapTeams().getTeamByPlayer(dead).filter(getT()::equals).isPresent()) {
+            ctEliminationsThisRound++;
+        }
         pendingFinalKillAssist = calculatePendingFinalKillAssist(context);
         if (this.isStart) {
             MapTeams teams = this.getMapTeams();

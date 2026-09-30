@@ -26,9 +26,9 @@ description: 配置 BlockOffensive 地图的回合、经济、自动开始和展
 | --- | ---: | --- |
 | `startEconomy` | `800` | 比赛初始资金 |
 | `defaultLoserEconomy` | `1400` | 默认败方经济基数 |
-| `defuseEconomy` | `600` | 拆包相关奖励 |
+| `defuseEconomy` | `300` | 拆包者个人奖励（旧配置的默认值 `600` 会迁移为 `300`） |
 | `compensationBase` | `500` | 连败补偿递增基数 |
-| `tDeathRewardPer` | `50` | T 阵亡相关奖励参数 |
+| `tDeathRewardPer` | `50` | CT 每击杀一名 T 时，每名 CT 队员获得的奖励 |
 | `closeShopTime` | `200` tick | 商店关闭时间参数（约 10 秒） |
 | `timeoutEconomy` | `3250` | 超时结算奖励 |
 | `aceEconomy` | `3250` | 全灭结算奖励 |

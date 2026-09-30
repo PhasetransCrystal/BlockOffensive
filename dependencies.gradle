@@ -10,6 +10,9 @@ def withoutMinecraftLibraries = { dependency ->
 
 // Dependencies
 dependencies {
+    testImplementation("org.junit.jupiter:junit-jupiter:6.0.1")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+
     withoutMinecraftLibraries(additionalRuntimeClasspath(implementation("icyllis.modernui:ModernUI-Core:${modernui_core_version}")))
     withoutMinecraftLibraries(additionalRuntimeClasspath(implementation("icyllis.modernui:ModernUI-Markflow:${modernui_core_version}")))
     modImplementation "icyllis.modernui:ModernUI-Forge:${minecraft_version}-${modernui_forge_version}"
