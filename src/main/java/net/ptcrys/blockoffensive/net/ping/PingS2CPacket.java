@@ -7,8 +7,7 @@ import java.util.function.Supplier;
 
 /**
  * 服务端 → 同队客户端：队友 Ping 广播（含类型、坐标、发送者名）。
- * <p>
- * 客户端在 HUD 上渲染屏幕边缘方向指示器（CSGO 风格），10 秒后过期。
+ * 客户端在 HUD 上渲染目标位置或屏幕边缘方向指示器，超过配置的存活时间后过期。
  */
 public class PingS2CPacket {
 

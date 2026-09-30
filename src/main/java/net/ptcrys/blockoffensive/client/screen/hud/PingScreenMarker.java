@@ -13,7 +13,7 @@ import net.minecraft.world.phys.Vec3;
  * <p>
  * 将 Ping 世界坐标投影到屏幕实际位置（准星视角内），在该位置绘制彩色圆点 + 距离（米）。
  * 投影基于相机 yaw/pitch 与 FOV，标记准确落在 Ping 在屏幕上的位置，不是边缘环绕箭头。
- * 视野外不绘制。与实体光柱（PingMarkerRenderer）双保险，保证 Ping 一定有可见反馈。
+ * 视野外显示在屏幕边缘，便于队友判断 Ping 方向。
  */
 public final class PingScreenMarker {
 

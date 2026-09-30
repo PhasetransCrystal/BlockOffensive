@@ -184,8 +184,6 @@ public class CSGameMap extends CSMap {
     /** Players who became sole living teammate while facing 2+ living enemies this round. */
     private final Set<UUID> roundClutchCandidates = new HashSet<>();
 
-    /** 队友 Ping 标记实体映射（玩家 → 实体 id），再次 Ping 时移除旧标记。 */
-    private final Map<UUID, Integer> pingEntities = new HashMap<>();
     /** 每玩家上次 Ping 时间（tick），用于频率限制。 */
     private final Map<UUID, Long> lastPingTick = new HashMap<>();
 
@@ -1828,7 +1826,7 @@ public class CSGameMap extends CSMap {
     }
 
     /**
-     * 客户端 → 服务端：准星 Ping。校验后在图中生成同队可见的标记实体并广播给同队玩家。
+     * 客户端 → 服务端：准星 Ping。校验后广播坐标和类型给同队玩家。
      */
     public void handlePing(ServerPlayer sender, int type, double x, double y, double z) {
         if (!isStart || sender == null) {
@@ -1855,30 +1853,7 @@ public class CSGameMap extends CSMap {
             return;
         }
         lastPingTick.put(sender.getUUID(), nowTick);
-        if (!(sender.level() instanceof net.minecraft.server.level.ServerLevel serverLevel)) {
-            return;
-        }
-
-        // 同一玩家再次 Ping：旧标记消失，只保留新标记
-        Integer oldId = pingEntities.remove(sender.getUUID());
-        if (oldId != null) {
-            net.minecraft.world.entity.Entity old = serverLevel.getEntity(oldId);
-            if (old != null && !old.isRemoved()) {
-                old.discard();
-            }
-        }
-
-        net.ptcrys.blockoffensive.entity.PingMarkerEntity marker = new net.ptcrys.blockoffensive.entity.PingMarkerEntity(serverLevel, sender.getUUID(), type);
-        marker.setPos(x, y, z);
-        serverLevel.addFreshEntity(marker);
-        pingEntities.put(sender.getUUID(), marker.getId());
-        FPSMatch.LOGGER.info("[BO PingSrv] spawned marker id={} owner={} type={} pos=({},{},{})",
-                marker.getId(), sender.getUUID(), type,
-                String.format(java.util.Locale.ROOT, "%.2f", x),
-                String.format(java.util.Locale.ROOT, "%.2f", y),
-                String.format(java.util.Locale.ROOT, "%.2f", z));
-
-        // 广播给同队玩家（客户端渲染屏幕标记/光柱）
+        // 广播给同队玩家，由客户端 HUD 显示 Ping。
         net.ptcrys.blockoffensive.net.ping.PingS2CPacket packet = new net.ptcrys.blockoffensive.net.ping.PingS2CPacket(
                 sender.getGameProfile().getName(), type, x, y, z);
         this.getMapTeams().getTeamByPlayer(sender).ifPresent(team -> team.getOnlinePlayers().forEach(uuid -> this.getPlayerByUUID(uuid)
