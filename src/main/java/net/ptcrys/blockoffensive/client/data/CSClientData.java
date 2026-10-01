@@ -37,7 +37,7 @@ public class CSClientData {
 
     public static final Map<UUID, WeaponData> weaponData = new ConcurrentHashMap<>();
 
-    // ===== 队友 Ping（Z 轮盘 → 世界内光柱标记，TTL 后自动消失） =====
+    // ===== 队友 Ping（HUD 标记，TTL 后自动消失） =====
     public static final int PING_MAX = 8;
     public static final java.util.List<PingData> pings = new java.util.concurrent.CopyOnWriteArrayList<>();
 

@@ -61,8 +61,6 @@ public class BOClientBootstrap {
     @SubscribeEvent
     public static void onRegisterEntityRenderEvent(EntityRenderersEvent.RegisterRenderers event) {
         event.registerEntityRenderer(BOEntityRegister.C4.get(), new C4Renderer());
-        event.registerEntityRenderer(BOEntityRegister.PING_MARKER.get(),
-                net.ptcrys.blockoffensive.client.renderer.PingMarkerRenderer::new);
     }
 
     public static List<PlayerInfo> getPlayerInfos() {

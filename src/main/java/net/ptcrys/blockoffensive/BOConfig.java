@@ -109,8 +109,8 @@ public class BOConfig {
                         "Teammate ping marker lifetime in seconds; expires automatically").defineInRange("pingTtlSeconds", 6, 3, 30);
 
                 pingMaxDistance = builder.comment(
-                        "Ping 标记最大显示距离（格），更远不渲染",
-                        "Max ping marker render distance in blocks").defineInRange("pingMaxDistance", 256.0D, 16.0D, 1024.0D);
+                        "Ping 标记最大距离（格）",
+                        "Maximum allowed ping distance in blocks").defineInRange("pingMaxDistance", 256.0D, 16.0D, 1024.0D);
             }
             builder.pop();
 

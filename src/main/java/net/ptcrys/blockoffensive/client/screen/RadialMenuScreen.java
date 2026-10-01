@@ -1,6 +1,7 @@
 package net.ptcrys.blockoffensive.client.screen;
 
 import net.ptcrys.blockoffensive.BlockOffensive;
+import net.ptcrys.blockoffensive.client.key.RadioKey;
 import net.ptcrys.blockoffensive.net.ping.PingC2SPacket;
 
 import net.minecraft.client.Minecraft;
@@ -16,12 +17,16 @@ import net.minecraft.world.phys.Vec3;
  * Z 键标记轮盘（CSGO 风格）：
  * <p>
  * 屏幕中央放射状 6 个选项——标记 / 敌人 / 危险 / 进攻 / 防守 / 支援。
- * 鼠标悬停高亮，左键点击后向准星指向位置发送 Ping（PingC2SPacket），
- * 服务端广播给同队，队友在世界内看到光柱标记（5~8 秒后消失，同玩家新标替换旧标）。
+ * 长按时按鼠标方向高亮扇区，松开按键后向准星指向位置发送 Ping（PingC2SPacket），
+ * 服务端广播给同队，队友在 HUD 上看到目标位置或屏幕边缘提示（到期消失，同玩家新标替换旧标）。
  */
 public class RadialMenuScreen extends Screen {
 
     private static final int SLOT_COUNT = 6;
+    private static final int OPTION_RADIUS = 64;
+    private static final int BUTTON_SIZE = 36;
+    private static final int SELECTION_INNER_RADIUS = 24;
+    private static final int SELECTION_OUTER_RADIUS = 106;
     /** 标签翻译键（与 PING_TYPES 一一对应）。 */
     private static final String[] LABEL_KEYS = {
             "blockoffensive.ping.option.normal",
@@ -50,33 +55,32 @@ public class RadialMenuScreen extends Screen {
 
         int cx = this.width / 2;
         int cy = this.height / 2;
-        int radius = 64;
-        int btn = 36;
         var font = Minecraft.getInstance().font;
         int selectedSlot = slotAt(mouseX, mouseY);
 
         for (int i = 0; i < SLOT_COUNT; i++) {
             double ang = Math.toRadians(-90.0D + i * (360.0D / SLOT_COUNT));
-            int x = cx + (int) (Math.cos(ang) * radius) - btn / 2;
-            int y = cy + (int) (Math.sin(ang) * radius) - btn / 2;
+            int x = cx + (int) (Math.cos(ang) * OPTION_RADIUS) - BUTTON_SIZE / 2;
+            int y = cy + (int) (Math.sin(ang) * OPTION_RADIUS) - BUTTON_SIZE / 2;
             boolean over = selectedSlot == i;
             int bg = ((over ? 0xCC : 0x55) << 24) | (COLORS[i] & 0xFFFFFF);
-            graphics.fill(x, y, x + btn, y + btn, bg);
+            graphics.fill(x, y, x + BUTTON_SIZE, y + BUTTON_SIZE, bg);
             // 边框
             int border = over ? 0xFFFFFFFF : 0x99FFFFFF;
-            graphics.fill(x, y, x + btn, y + 1, border);
-            graphics.fill(x, y + btn - 1, x + btn, y + btn, border);
-            graphics.fill(x, y, x + 1, y + btn, border);
-            graphics.fill(x + btn - 1, y, x + btn, y + btn, border);
+            graphics.fill(x, y, x + BUTTON_SIZE, y + 1, border);
+            graphics.fill(x, y + BUTTON_SIZE - 1, x + BUTTON_SIZE, y + BUTTON_SIZE, border);
+            graphics.fill(x, y, x + 1, y + BUTTON_SIZE, border);
+            graphics.fill(x + BUTTON_SIZE - 1, y, x + BUTTON_SIZE, y + BUTTON_SIZE, border);
             // 标签（走翻译）
             String label = Component.translatable(LABEL_KEYS[i]).getString();
             int tw = font.width(label);
             graphics.drawString(font, label,
-                    cx + (int) (Math.cos(ang) * radius) - tw / 2,
-                    cy + (int) (Math.sin(ang) * radius) + btn / 2 + 4, 0xFFFFFFFF);
+                    cx + (int) (Math.cos(ang) * OPTION_RADIUS) - tw / 2,
+                    cy + (int) (Math.sin(ang) * OPTION_RADIUS) + BUTTON_SIZE / 2 + 4, 0xFFFFFFFF);
         }
 
-        String hint = Component.translatable("blockoffensive.ping.menu.hint").getString();
+        String hint = Component.translatable("blockoffensive.ping.menu.hint",
+                RadioKey.RADIO_TACTICAL_KEY.getTranslatedKeyMessage()).getString();
         graphics.drawString(font, hint, cx - font.width(hint) / 2, 12, 0xFFFFFFFF);
         if (selectedSlot >= 0) {
             String selected = Component.translatable(LABEL_KEYS[selectedSlot]).getString();
@@ -100,8 +104,7 @@ public class RadialMenuScreen extends Screen {
     }
 
     /**
-     * CSGO 式交互：按住 Z 打开轮盘后，移动鼠标指向方向，<b>松开 Z</b> 即发送所选标点。
-     * 鼠标不在任何选项上（快速点按）则发送默认普通标记。
+     * 长按打开轮盘后，移动鼠标指向方向，松开按键发送所选标记；短按由按键处理器发送普通标记。
      */
     @Override
     public boolean keyReleased(int keyCode, int scanCode, int modifiers) {
@@ -111,7 +114,9 @@ public class RadialMenuScreen extends Screen {
                 double mx = mc.mouseHandler.xpos() / mc.getWindow().getGuiScale();
                 double my = mc.mouseHandler.ypos() / mc.getWindow().getGuiScale();
                 int slot = slotAt(mx, my);
-                fire(slot >= 0 ? slot : 0);
+                if (slot >= 0) {
+                    fire(slot);
+                }
             }
             this.onClose();
             return true;
@@ -128,17 +133,18 @@ public class RadialMenuScreen extends Screen {
         Minecraft mc = Minecraft.getInstance();
         int cx = mc.getWindow().getGuiScaledWidth() / 2;
         int cy = mc.getWindow().getGuiScaledHeight() / 2;
-        int radius = 64;
-        int btn = 36;
-        for (int i = 0; i < SLOT_COUNT; i++) {
-            double ang = Math.toRadians(-90.0D + i * (360.0D / SLOT_COUNT));
-            int x = cx + (int) (Math.cos(ang) * radius) - btn / 2;
-            int y = cy + (int) (Math.sin(ang) * radius) - btn / 2;
-            if (mouseX >= x && mouseX <= x + btn && mouseY >= y && mouseY <= y + btn) {
-                return i;
-            }
+        double dx = mouseX - cx;
+        double dy = mouseY - cy;
+        double distanceSquared = dx * dx + dy * dy;
+        if (distanceSquared < SELECTION_INNER_RADIUS * SELECTION_INNER_RADIUS || distanceSquared > SELECTION_OUTER_RADIUS * SELECTION_OUTER_RADIUS) {
+            return -1;
         }
-        return -1;
+        double angle = Math.toDegrees(Math.atan2(dy, dx));
+        return (int) ((angle + 480.0D) % 360.0D / (360.0D / SLOT_COUNT));
+    }
+
+    public static void sendQuickPing() {
+        fire(0);
     }
 
     private static void fire(int slot) {
