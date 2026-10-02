@@ -23,6 +23,7 @@ import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraftforge.event.TickEvent;
+import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.eventbus.api.EventPriority;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
@@ -151,6 +152,24 @@ public class CSGameEvents {
                         }
                     });
         }
+    }
+
+    @SubscribeEvent(priority = EventPriority.LOWEST)
+    public static void onDeathmatchPlayerLoggedIn(FPSMapEvent.PlayerEvent.LoggedInEvent event) {
+        if (event.getMap() instanceof CSDeathMatchMap dm) {
+            dm.handlePlayerReconnect(event.getPlayer());
+        }
+    }
+
+    @SubscribeEvent(priority = EventPriority.LOWEST)
+    public static void onDeathmatchLoginSync(PlayerEvent.PlayerLoggedInEvent event) {
+        if (!(event.getEntity() instanceof ServerPlayer player)) return;
+        FPSMCore.getInstance().getMapByPlayerWithSpec(player)
+                .filter(map -> map instanceof CSDeathMatchMap)
+                .ifPresent(map -> {
+                    map.pullGameInfo(player);
+                    map.getMapTeams().sync(player);
+                });
     }
 
     // 在登出时自动清理身上的C4和物品

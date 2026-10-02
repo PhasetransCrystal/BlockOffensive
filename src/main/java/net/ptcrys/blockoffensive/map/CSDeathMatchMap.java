@@ -1,6 +1,7 @@
 package net.ptcrys.blockoffensive.map;
 
 import net.ptcrys.blockoffensive.BlockOffensive;
+import net.ptcrys.blockoffensive.spectator.BOSpecManager;
 import net.ptcrys.fpsmatch.common.attributes.ammo.BulletproofArmorAttribute;
 import net.ptcrys.fpsmatch.common.capability.map.GameEndTeleportCapability;
 import net.ptcrys.fpsmatch.common.capability.team.ShopCapability;
@@ -162,6 +163,15 @@ public class CSDeathMatchMap extends CSMap {
 
     @Override
     public MapTeams.JoinTeamResult join(String teamName, ServerPlayer player) {
+        if (CSDMTeamSemantics.SPECTATOR.equals(teamName)) {
+            MapTeams.JoinTeamResult result = super.join(teamName, player);
+            if (result.isSuccess()) {
+                player.setGameMode(GameType.SPECTATOR);
+                getMapTeams().getPlayerData(player).ifPresent(data -> data.setLiving(false));
+                setBystander(player);
+            }
+            return result;
+        }
         String targetTeamName = deathmatchTeamNames().contains(teamName) ? teamName : selectDeathmatchTeamName(player.getUUID()).orElse(null);
         if (targetTeamName == null) {
             return MapTeams.JoinTeamResult.of(MapTeams.JoinTeamResult.Status.NO_AVAILABLE_TEAM);
@@ -191,6 +201,9 @@ public class CSDeathMatchMap extends CSMap {
 
     @Override
     public boolean start() {
+        if (getAllSpawnPoints().values().stream().allMatch(List::isEmpty)) {
+            return false;
+        }
         if (!super.start()) {
             return false;
         }
@@ -256,12 +269,14 @@ public class CSDeathMatchMap extends CSMap {
 
     @Override
     public void reset() {
+        this.isStart = false;
         super.reset();
         this.isError = false;
-        this.isStart = false;
         this.currentMatchTime = 0;
         this.getMapTeams().getJoinedPlayers().forEach(data -> data.getPlayer().ifPresent(this::resetPlayerClientData));
         this.getMapTeams().reset();
+        this.playerData.clear();
+        this.spawnPoints.clear();
     }
 
     public void resetAllPlayerData() {
@@ -269,7 +284,7 @@ public class CSDeathMatchMap extends CSMap {
     }
 
     private void initializePlayers(MapTeams mapTeams) {
-        mapTeams.getJoinedPlayersMap().forEach(this::initializePlayer);
+        mapTeams.getNormalTeams().forEach(team -> initializePlayer(team, team.getPlayersData()));
     }
 
     private void initializePlayer(ServerTeam team, List<PlayerData> players) {
@@ -320,6 +335,9 @@ public class CSDeathMatchMap extends CSMap {
 
     @Override
     public void handleDeath(DeathContext context) {
+        if (!this.isStart || !this.checkGameHasPlayer(context.getDeadPlayer())) {
+            return;
+        }
         super.handleDeath(context);
         // 立即重生玩家
         respawnPlayer(context.getDeadPlayer());
@@ -329,12 +347,17 @@ public class CSDeathMatchMap extends CSMap {
         respawnPlayer(player, false);
     }
 
+    public void handlePlayerReconnect(ServerPlayer player) {
+        respawnPlayer(player, true);
+    }
+
     private void respawnPlayer(ServerPlayer player, boolean resetLoadout) {
         // 对局未在进行（已结束/重置）时不重生，避免胜利结算瞬间死亡被传回出生点
-        if (!this.isStart) {
+        if (!this.isStart || !this.checkGameHasPlayer(player)) {
             return;
         }
 
+        BOSpecManager.resetSpectating(player);
         // 重置玩家状态
         player.heal(player.getMaxHealth());
         player.removeAllEffects();
@@ -361,7 +384,8 @@ public class CSDeathMatchMap extends CSMap {
         });
 
         // 给予重生保护（以服务器游戏时间计时，跟随游戏节奏而非墙钟）
-        getDMPlayerData(player.getUUID()).ifPresent(d -> d.respawn(this.getServerLevel().getGameTime()));
+        this.playerData.computeIfAbsent(player.getUUID(), DMPlayerData::new)
+                .respawn(this.getServerLevel().getGameTime());
     }
 
     private static void giveFullArmor(ServerPlayer player) {
